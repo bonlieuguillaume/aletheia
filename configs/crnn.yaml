@@ -1,0 +1,27 @@
+# CNN feature grid read by a bidirectional LSTM (spatial consistency).
+seed: 0
+output_dir: runs
+
+data:
+  root: data
+  class_names: [real, fake]
+  img_size: 256
+  log_transform: true
+
+model:
+  name: crnn
+  widths: [32, 64, 128, 256]
+  grid: 8               # 8x8 = 64-step sequence fed to the RNN
+  rnn_type: lstm        # or gru
+  hidden: 256
+  num_layers: 2
+  dropout: 0.3
+
+train:
+  epochs: 30
+  batch_size: 32
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 2
+  class_weights: true
+  grad_clip: 1.0

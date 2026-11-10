@@ -1,0 +1,23 @@
+# Small CNN trained from scratch — fast baseline.
+seed: 0
+output_dir: runs          # overridden on Colab with --output-dir (Google Drive)
+
+data:
+  root: data              # overridden on Colab with --data-root
+  class_names: [real, fake]   # label 0 = real, 1 = fake (sub-folder names)
+  img_size: 256           # crop size (no resizing: it erases forensic traces)
+  log_transform: true     # log1p on amplitude, then per-image standardisation
+
+model:
+  name: simple_cnn
+  widths: [32, 64, 128, 256]
+  dropout: 0.3
+
+train:
+  epochs: 30
+  batch_size: 32
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  num_workers: 2
+  class_weights: true
+  grad_clip: 1.0
