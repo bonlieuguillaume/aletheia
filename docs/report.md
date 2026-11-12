@@ -40,6 +40,15 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   regions, ascending/descending orbits, seasons.
   - *Known limit:* a model trained on forest only is not expected to
     generalize to other land covers.
+- **Orbits balanced: ideally 5 ascending + 5 descending**, the orbit written
+  in each scene folder name. Sentinel-1 looks to the right of its track: on a
+  north-up image an ascending pass looks towards ~78 deg (shadows to the
+  east), a descending one towards ~282 deg (shadows to the west). If the
+  scenes are not 5-5, tiling **mirrors east-west** some scenes of the
+  majority orbit: the mirror maps a look direction d to 360 - d, i.e. exactly
+  78 deg <-> 282 deg. A mirrored scene replaces its original (never both, or
+  one landscape could end up in two splits). The manifest keeps the orbit of
+  the acquisition, whether it was mirrored, and the resulting geometry.
 - No speckle filter, no extra multilook. IW GRD is nevertheless **already
   multilooked by ESA** (about 5x1 looks, ENL ~4.4): the speckle is not
   single-look, which matters for any speckle statistic (v0.2).
@@ -76,7 +85,9 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
 ### 2.3 Splits and reproducibility
 
 - **Split by scene, 6 train / 2 val / 2 test**: the test only contains
-  landscapes never seen in training.
+  landscapes never seen in training. Val and test each take one
+  ascending-like and one descending-like scene, so both geometries are
+  measured.
   - *Possible improvement, not planned (too time-consuming):* scene-level
     cross-validation, e.g. 5 rounds where 2 different scenes serve as test
     and the 8 others for training, averaging the scores. Training would see
@@ -163,9 +174,12 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - *Why not per patch:* per-patch standardization would erase the
     radiometric differences between regions, which splicing detection (v0.3)
     relies on.
-- **No augmentation by default.** Flips and rotations change the apparent
-  radar look direction (shadow and layover on the other side), which never
-  happens in real data: to be tested, not assumed.
+- **Augmentation: east-west mirror only, compared with none (#37).** The
+  mirror turns a patch into a plausible image of the other orbit (see 2.1).
+  Not used: north-south mirror and 90 deg rotations (look directions
+  Sentinel-1 never has), 180 deg rotation (~24 deg off the descending look
+  direction, because of the ~12 deg inclination of the track). Off for the
+  first run, then one run with it, all else equal.
 - **Checkpoint selection on the validation loss** (threshold-free); early
   stopping after 8 epochs without improvement.
 - Output size: modern U-Nets pad their convolutions, so a 512x512 input

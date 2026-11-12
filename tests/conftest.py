@@ -34,13 +34,19 @@ def make_synthetic_scene(rng, height, width, empty_columns):
 
 @pytest.fixture(scope="session")
 def scenes_dir(tmp_path_factory):
-    """Five synthetic scenes, one folder each, like on Google Drive."""
+    """Five synthetic scenes, one folder each, like on Google Drive.
+
+    4 ascending + 1 descending: tiling mirrors one ascending scene to reach
+    3 ascending-like + 2 descending-like.
+    """
     root = tmp_path_factory.mktemp("scenes")
     rng = np.random.default_rng(0)
     for k in range(5):
-        # 3 x 4 windows of 256; the empty band removes the first column.
+        orbit = "asc" if k < 4 else "desc"
+        # 3 x 4 windows of 256; the empty band removes the first column
+        # (the last one once mirrored).
         scene = make_synthetic_scene(rng, height=800, width=1100, empty_columns=80)
-        write_patch(root / f"scene_{k}" / f"scene_{k}.tif", scene)
+        write_patch(root / f"scene_{k}_{orbit}" / f"scene_{k}.tif", scene)
     return root
 
 

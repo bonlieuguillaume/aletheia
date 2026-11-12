@@ -39,7 +39,7 @@ DEFAULT_CONFIG = {
     "pretrained": True,           # ImageNet weights for the encoder
     "reflect_padding": True,      # issue #31
     "input_scale": "linear",      # "linear" (converted to dB here) or "db"
-    "augment": False,             # flips; off by default, see note in SARPatchDataset
+    "augment": False,             # east-west mirror, see SARPatchDataset
     "batch_size": 8,
     "epochs": 40,
     "learning_rate": 3e-4,
@@ -108,9 +108,11 @@ class SARPatchDataset(Dataset):
     - valid: 0 on source pixels (mask == 2, ignored by loss and metrics),
       1 elsewhere. Authentic patches have target = 0 and valid = 1 everywhere.
 
-    Note on augmentation: flips and rotations change the apparent radar look
-    direction (shadows and layover fall on the other side), which never
-    happens in real data. Off by default; to be tested, not assumed.
+    Augmentation (off by default, compared in an experiment): east-west
+    mirror only, half of the time. On a north-up image it turns an ascending
+    look direction (~78 deg) into exactly the descending one (~282 deg), see
+    `tiling.mirror_east_west`. North-south mirrors and 90 deg rotations are
+    NOT used: they give look directions Sentinel-1 never has.
     """
 
     def __init__(self, dataset_dir, manifest, split, mean, std, input_scale, augment=False):
@@ -146,11 +148,11 @@ class SARPatchDataset(Dataset):
             valid = (mask != MASK_SOURCE).astype(np.float32)
 
         if self.augment:
-            # torch random numbers: correctly seeded in every DataLoader worker.
+            # East-west mirror (columns reversed), the same for the image and
+            # its target / valid maps. torch random numbers: correctly seeded
+            # in every DataLoader worker.
             if torch.rand(1).item() < 0.5:
                 image, target, valid = image[:, ::-1], target[:, ::-1], valid[:, ::-1]
-            if torch.rand(1).item() < 0.5:
-                image, target, valid = image[::-1, :], target[::-1, :], valid[::-1, :]
 
         # (H, W) -> (1, H, W): one channel. ascontiguousarray undoes the flips' views.
         tensors = [torch.from_numpy(np.ascontiguousarray(a)).unsqueeze(0) for a in (image, target, valid)]

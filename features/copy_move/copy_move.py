@@ -168,9 +168,10 @@ def build_dataset(dataset_dir, level=1, seed=SEED):
     -------
     pandas.DataFrame
         The full manifest, one row per sample, also written to
-        `dataset_dir/manifest.csv`. Columns:
-        sample_id, patch_id, label (0 authentic / 1 forged), file, mask_file,
-        scene, row, col, split, level, seed, and the forgery parameters.
+        `dataset_dir/manifest.csv`. Columns: sample_id, label (0 authentic /
+        1 forged), file, mask_file, every column of patches.csv (patch_id,
+        scene, row, col, orbit, mirrored, geometry, split), and for forged
+        samples level, seed and the forgery parameters.
     """
     dataset_dir = Path(dataset_dir)
     patches = read_manifest(dataset_dir / "patches.csv")
@@ -189,13 +190,9 @@ def build_dataset(dataset_dir, level=1, seed=SEED):
         write_patch(dataset_dir / "forged" / f"{patch_id}.tif", forged)
         write_mask(dataset_dir / "masks" / f"{patch_id}.tif", mask)
 
-        common = {
-            "patch_id": patch_id,
-            "scene": patch_row["scene"],
-            "row": patch_row["row"],
-            "col": patch_row["col"],
-            "split": patch_row["split"],
-        }
+        # Every column of patches.csv (scene, position, orbit, split...) is
+        # carried over to both samples of the pair.
+        common = patch_row.to_dict()
         # The authentic sample: no mask file, no forgery parameters.
         rows.append({"sample_id": f"{patch_id}_real", "label": 0,
                      "file": f"real/{patch_id}.tif", "mask_file": "", **common})

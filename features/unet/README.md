@@ -25,7 +25,10 @@ Choices (rationale in `docs/report.md`, section 4):
 - `config.json` records the configuration, the normalization and the git
   commit of the code.
 
-Known limits: no augmentation by default (flips change the apparent radar
-look direction, to be tested rather than assumed). The validation metrics in
+Augmentation (`augment`, off by default, compared in #37): east-west mirror
+only, half of the time, which turns a patch into a plausible image of the
+other orbit. No north-south mirror nor rotation (impossible look directions).
+
+Known limits: the validation metrics in
 `log.csv` use a fixed 0.5 threshold and are for monitoring only; the real
 thresholds are chosen by the evaluation.

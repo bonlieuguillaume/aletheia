@@ -44,6 +44,23 @@ def test_loss_ignores_source_pixels():
                          unet.loss_function(flags_source, target, valid), atol=1e-6)
 
 
+def test_augmentation_is_an_east_west_mirror_only(dataset_dir, monkeypatch):
+    from features.sar_io.sar_io import read_manifest
+
+    manifest = read_manifest(dataset_dir / "manifest.csv")
+    dataset = unet.SARPatchDataset(dataset_dir, manifest, "train", 0.0, 1.0, "linear", augment=True)
+    forged_index = int(dataset.rows.index[dataset.rows["label"] == 1][0])
+
+    # Force the random draw so that the mirror is applied.
+    monkeypatch.setattr(unet.torch, "rand", lambda *args, **kwargs: torch.zeros(1))
+    image, target, valid = dataset[forged_index]
+    _, reference, mask = dataset.load(forged_index)
+
+    assert np.array_equal(image[0].numpy(), reference[:, ::-1])          # columns reversed
+    assert np.array_equal(target[0].numpy(), (mask == 1)[:, ::-1])       # mask follows
+    assert np.array_equal(valid[0].numpy(), (mask != 2)[:, ::-1])
+
+
 def test_dB_conversion_handles_zeros():
     values = unet.to_model_scale(np.array([0.0, 1.0, np.nan], dtype=np.float32), "linear")
     assert np.all(np.isfinite(values))

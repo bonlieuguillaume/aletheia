@@ -7,17 +7,25 @@ SNAP graph that produced it), as put on Google Drive by the user:
         <scene_name>/<anything>.tif
         <scene_name>/<anything>.xml      (not read here, kept with the data)
 
+The orbit of each scene (ascending / descending) is read from its folder name
+(containing "asc" or "desc") or given explicitly.
+
 Output, in `out_dir`:
 
     real/<patch_id>.tif        authentic patches (float32, no georeferencing)
-    patches.csv                one row per patch: patch_id, scene, row, col, split
+    patches.csv                one row per patch: patch_id, scene, row, col,
+                               orbit, mirrored, geometry, split
 
 Choices (see docs/report.md, section 2):
 - crop, never resize (resizing would destroy fine-scale traces);
 - a patch is rejected if more than 5 % of its pixels are no-data;
 - a fixed number of patches is drawn at random in each scene, so that every
   scene weighs the same in the dataset;
-- the train / val / test split is made by scene, never by patch.
+- ascending and descending geometries are balanced: if needed, some scenes of
+  the majority orbit are mirrored east-west, which turns their look direction
+  into the one of the other orbit (see `mirror_east_west`);
+- the train / val / test split is made by scene, never by patch, and val and
+  test take as many scenes of each geometry.
 
 Command line (from the repository root):
 
@@ -46,6 +54,12 @@ MAX_NODATA_FRACTION = 0.05
 SPLIT_COUNTS = {"val": 2, "test": 2}  # the remaining scenes go to "train"
 SEED = 0
 
+ORBITS = ["asc", "desc"]
+
+
+# ---------------------------------------------------------------------------
+# Scenes and orbits
+# ---------------------------------------------------------------------------
 
 def find_scenes(scenes_dir):
     """List the scenes: one sub-folder per scene, holding one `.tif`.
@@ -77,11 +91,92 @@ def find_scenes(scenes_dir):
     return scenes
 
 
-def assign_splits(scene_names, split_counts=None, seed=SEED, forced=None):
+def orbit_from_name(scene_name):
+    """Read the orbit from a scene name: "asc" or "desc", None if absent.
+
+    "desc" is tested first: a name containing "desc" never means ascending.
+    """
+    name = scene_name.lower()
+    if "desc" in name:
+        return "desc"
+    if "asc" in name:
+        return "asc"
+    return None
+
+
+def scene_orbits(scene_names, orbits=None):
+    """Orbit of every scene, from `orbits` if given, else from the names.
+
+    Raises an error listing the scenes whose orbit is unknown: the balance of
+    the dataset and the split depend on it, so it must not be guessed.
+    """
+    if orbits is None:
+        orbits = {}
+
+    result = {}
+    unknown = []
+    for name in scene_names:
+        orbit = orbits.get(name, orbit_from_name(name))
+        if orbit not in ORBITS:
+            unknown.append(name)
+        result[name] = orbit
+
+    if unknown:
+        raise ValueError(f"Orbit unknown for {unknown}: put 'asc' or 'desc' in the folder "
+                         f"name, or give them in `orbits`")
+    return result
+
+
+def choose_mirrored_scenes(orbits, seed=SEED):
+    """Choose the scenes to mirror so that both geometries are balanced.
+
+    With n_asc ascending and n_desc descending scenes, mirroring k scenes of
+    the majority moves them to the other geometry; k = |n_asc - n_desc| // 2
+    gives the best balance (5-5 from 7-3 by mirroring 2 scenes). The scenes to
+    mirror are drawn at random with the seed.
+
+    Returns
+    -------
+    set of str
+        Names of the scenes to mirror (empty if already balanced).
+    """
+    by_orbit = {orbit: sorted(n for n, o in orbits.items() if o == orbit) for orbit in ORBITS}
+    majority = max(ORBITS, key=lambda orbit: len(by_orbit[orbit]))
+    minority = [orbit for orbit in ORBITS if orbit != majority][0]
+    n_to_mirror = (len(by_orbit[majority]) - len(by_orbit[minority])) // 2
+
+    rng = np.random.default_rng(seed)
+    chosen = rng.choice(by_orbit[majority], size=n_to_mirror, replace=False)
+    return set(str(name) for name in chosen)
+
+
+def mirror_east_west(image):
+    """Mirror a north-up image east-west (left <-> right).
+
+    Sentinel-1 looks to the right of its track. On a terrain-corrected,
+    north-up image, an ascending pass looks towards ~78 deg (east-north-east)
+    and a descending one towards ~282 deg (west-north-west). An east-west
+    mirror maps a look direction d to 360 - d, i.e. 78 deg to 282 deg: the
+    mirrored ascending image has exactly the look direction of a descending
+    one (shadows and layover on the other side). A 180 deg rotation would be
+    off by ~24 deg, and a north-south mirror or a 90 deg rotation would give
+    look directions Sentinel-1 never has.
+    """
+    return image[:, ::-1]
+
+
+# ---------------------------------------------------------------------------
+# Split
+# ---------------------------------------------------------------------------
+
+def assign_splits(scene_names, split_counts=None, seed=SEED, forced=None, geometries=None):
     """Assign each scene to train, val or test.
 
     The split is made by scene, so that the test only contains landscapes
-    never seen during training (docs/report.md, section 2.3).
+    never seen during training (docs/report.md, section 2.3). If the
+    geometries are given, val and test take as many scenes of each geometry
+    (e.g. 2 val scenes = 1 ascending-like + 1 descending-like), so that both
+    are measured.
 
     Parameters
     ----------
@@ -92,8 +187,10 @@ def assign_splits(scene_names, split_counts=None, seed=SEED, forced=None):
     seed : int
         Seed of the random draw of the val / test scenes.
     forced : dict, optional
-        Scene name -> split, to choose some scenes by hand (e.g. keep a given
-        scene for the test). The other scenes are drawn at random.
+        Scene name -> split, to choose some scenes by hand. The other scenes
+        are drawn at random.
+    geometries : dict, optional
+        Scene name -> "asc" / "desc" (after mirroring). None = one group.
 
     Returns
     -------
@@ -104,26 +201,47 @@ def assign_splits(scene_names, split_counts=None, seed=SEED, forced=None):
         split_counts = SPLIT_COUNTS
     if forced is None:
         forced = {}
+    if geometries is None:
+        geometries = {name: "all" for name in scene_names}
 
     splits = dict(forced)
-
-    # Scenes not chosen by hand, in a seeded random order.
-    remaining = [name for name in sorted(scene_names) if name not in forced]
     rng = np.random.default_rng(seed)
-    rng.shuffle(remaining)
 
-    # Fill val, then test, up to the requested counts; the rest is train.
+    # Scenes not chosen by hand, per geometry, in a seeded random order.
+    groups = sorted(set(geometries.values()))
+    remaining = {}
+    for group in groups:
+        names = [n for n in sorted(scene_names) if geometries[n] == group and n not in forced]
+        rng.shuffle(names)
+        remaining[group] = names
+
+    # Share the val / test scenes between the geometries, one at a time in
+    # turn. The turn carries on from val to test, so that with 1 val and 1
+    # test scene, one is ascending-like and the other descending-like.
+    group_index = 0
     for split_name in ["val", "test"]:
         already = sum(1 for s in splits.values() if s == split_name)
-        missing = split_counts.get(split_name, 0) - already
-        for _ in range(max(missing, 0)):
-            if remaining:
-                splits[remaining.pop(0)] = split_name
-    for name in remaining:
-        splits[name] = "train"
+        missing = max(split_counts.get(split_name, 0) - already, 0)
+
+        attempts = 0
+        while missing > 0 and attempts < 10 * len(groups):
+            group = groups[group_index % len(groups)]
+            if remaining[group]:
+                splits[remaining[group].pop(0)] = split_name
+                missing -= 1
+            group_index += 1
+            attempts += 1
+
+    for group in groups:
+        for name in remaining[group]:
+            splits[name] = "train"
 
     return splits
 
+
+# ---------------------------------------------------------------------------
+# Tiling
+# ---------------------------------------------------------------------------
 
 def nodata_mask(image):
     """Return a boolean array, True where the pixel is no-data.
@@ -164,7 +282,7 @@ def valid_windows(image, patch_size=PATCH_SIZE, max_nodata_fraction=MAX_NODATA_F
 
 def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PATCHES_PER_SCENE,
                 max_nodata_fraction=MAX_NODATA_FRACTION, split_counts=None, forced_splits=None,
-                seed=SEED):
+                orbits=None, balance_orbits=True, seed=SEED):
     """Tile every scene and write the authentic patches and their manifest.
 
     Parameters
@@ -177,6 +295,11 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
         See the module constants.
     split_counts, forced_splits
         See `assign_splits`.
+    orbits : dict, optional
+        Scene name -> "asc" / "desc"; scenes not listed are read from their
+        name (see `scene_orbits`).
+    balance_orbits : bool
+        Mirror scenes of the majority orbit to balance the two geometries.
 
     Returns
     -------
@@ -189,16 +312,31 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
     if not scenes:
         raise RuntimeError(f"No scene found in {scenes_dir}")
 
-    splits = assign_splits(list(scenes), split_counts, seed, forced_splits)
-    print("Split by scene:")
+    # Orbit of each scene, and the geometry it will have once tiled: the
+    # opposite one for the mirrored scenes.
+    orbit_of = scene_orbits(list(scenes), orbits)
+    mirrored = choose_mirrored_scenes(orbit_of, seed) if balance_orbits else set()
+    geometry_of = {}
+    for name, orbit in orbit_of.items():
+        if name in mirrored:
+            geometry_of[name] = "desc" if orbit == "asc" else "asc"
+        else:
+            geometry_of[name] = orbit
+
+    splits = assign_splits(list(scenes), split_counts, seed, forced_splits, geometry_of)
+    print("Scenes:")
     for name in sorted(scenes):
-        print(f"  {splits[name]:5s}  {name}")
+        note = "  (mirrored east-west)" if name in mirrored else ""
+        print(f"  {splits[name]:5s}  {orbit_of[name]:4s} -> {geometry_of[name]:4s}  {name}{note}")
 
     rows = []
     patch_counter = 0
     for scene_index, (scene_name, tif_path) in enumerate(sorted(scenes.items())):
         print(f"Reading {tif_path.name} ...")
         image = read_tif(tif_path).astype(np.float32)
+        scene_width = image.shape[1]
+        if scene_name in mirrored:
+            image = mirror_east_west(image)
 
         positions = valid_windows(image, patch_size, max_nodata_fraction)
         print(f"  {len(positions)} valid windows of {patch_size}x{patch_size}")
@@ -215,13 +353,22 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
             row, col = positions[k]
             patch = image[row:row + patch_size, col:col + patch_size]
 
+            # Position in the ORIGINAL scene, so it can be traced back (and
+            # used later for the incidence angle, #30): for a mirrored scene,
+            # the window starting at column `col` of the mirrored image covers
+            # columns [width - col - patch_size, width - col) of the original.
+            original_col = scene_width - col - patch_size if scene_name in mirrored else col
+
             patch_id = f"{patch_counter:06d}"
             write_patch(out_dir / "real" / f"{patch_id}.tif", patch)
             rows.append({
                 "patch_id": patch_id,
                 "scene": scene_name,
-                "row": row,  # position in the scene, kept for later
-                "col": col,  # (e.g. incidence angle, issue #30)
+                "row": row,
+                "col": original_col,
+                "orbit": orbit_of[scene_name],          # orbit of the acquisition
+                "mirrored": scene_name in mirrored,     # patch mirrored east-west
+                "geometry": geometry_of[scene_name],    # look geometry of the patch
                 "split": splits[scene_name],
             })
             patch_counter += 1
@@ -230,21 +377,23 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
     manifest = pd.DataFrame(rows)
     write_manifest(out_dir / "patches.csv", manifest)
     print(f"Done: {len(manifest)} patches in {out_dir}")
-    print(manifest.groupby("split").size().to_string())
+    print(manifest.groupby(["split", "geometry"]).size().to_string())
     return manifest
 
 
 def main(argv=None, prog=None):
     parser = argparse.ArgumentParser(prog=prog, description=__doc__.splitlines()[0])
-    parser.add_argument("--scenes-dir", required=True, help="one sub-folder per scene")
+    parser.add_argument("--scenes-dir", required=True, help="one sub-folder per scene, 'asc'/'desc' in its name")
     parser.add_argument("--out-dir", required=True, help="where real/ and patches.csv go")
     parser.add_argument("--patches-per-scene", type=int, default=PATCHES_PER_SCENE)
     parser.add_argument("--max-nodata", type=float, default=MAX_NODATA_FRACTION)
+    parser.add_argument("--no-balance", action="store_true", help="do not mirror scenes to balance the orbits")
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args(argv)
 
     tile_scenes(args.scenes_dir, args.out_dir, patches_per_scene=args.patches_per_scene,
-                max_nodata_fraction=args.max_nodata, seed=args.seed)
+                max_nodata_fraction=args.max_nodata, balance_orbits=not args.no_balance,
+                seed=args.seed)
 
 
 if __name__ == "__main__":

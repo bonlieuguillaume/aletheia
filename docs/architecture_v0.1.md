@@ -71,6 +71,12 @@ flowchart TB
   at least 32 px from the border). A pair always stays in one split.
 - **Mask**: `0` background, `1` pasted (the forgery), `2` source.
 - **Split by scene**: no landscape of the test was seen in training.
+- **Orbits balanced**: ideally 5 ascending + 5 descending scenes; otherwise
+  some scenes of the majority orbit are mirrored east-west, which gives them
+  exactly the look direction of the other orbit. Val and test each get one
+  scene of each geometry.
+- **Augmentation** (optional, compared in #37): the same east-west mirror,
+  applied at random to half of the training patches.
 
 ## 3. Model
 
