@@ -126,5 +126,23 @@ no longer helps.
 
 ## Features
 
-None yet: the code restarts from scratch, following the issues of the
-project (v0.1 first).
+Pipeline and metric procedure of v0.1: `docs/architecture_v0.1.md`. Each
+Colab step reads its input from Drive and writes its output back as one zip /
+run folder, so the steps chain through Drive, not through a shared session.
+
+- `features/sar_io/` - library, no notebook: every file format (scene /
+  patch / mask / probability-map TIFFs, manifest CSV with nullable integer
+  columns, dataset zips). Mask values 0 / 1 / 2 are defined here.
+- `features/tiling/` - #28: scenes -> 512x512 authentic patches,
+  `patches.csv`, split by scene, no-data rule (5 %).
+- `features/copy_move/` - #5, #24: forged twin + mask per patch,
+  `manifest.csv` (one row per sample). `LEVELS` maps a level to its
+  generator; levels 2-4 (#25-#27) go there.
+- `features/unet/` - #9, #10, #31: smp U-Net (ResNet-34, ImageNet),
+  reflection padding, BCE + batch Dice, resume from `last.pt`, `predict`.
+  `config.json` of a run holds the normalization and the git commit.
+- `features/evaluation/` - #6-#8, #32: model-agnostic metrics; settings
+  (score method, thresholds) chosen on val, frozen in `eval/settings.json`,
+  read back by `unet.load_model`.
+- `tests/` - pytest on synthetic data (256x256 patches), run by
+  `.github/workflows/tests.yml`.

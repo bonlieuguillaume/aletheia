@@ -1,0 +1,11 @@
+# Packages installed on Colab (with pip, on the Colab VM: nothing reaches the PC).
+# torch / torchvision are NOT listed: Colab ships them with CUDA, and
+# reinstalling them from PyPI would waste minutes and can break the GPU setup.
+# numpy, pandas, scikit-learn and matplotlib are preinstalled on Colab too,
+# listed here so that the CI (GitHub Actions) installs the same set.
+numpy
+pandas
+scikit-learn
+matplotlib
+tifffile
+segmentation-models-pytorch

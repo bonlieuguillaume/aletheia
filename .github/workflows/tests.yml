@@ -1,0 +1,29 @@
+# Run the tests on GitHub's own Linux machines at every push and pull request.
+# Nothing runs or gets installed on the user's PC (see docs/github_actions.md).
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # same as Colab
+          cache: pip
+
+      - name: Install the packages
+        run: |
+          # CPU-only torch: the GitHub machines have no GPU, and the CPU build
+          # is ~10x smaller to download than the CUDA one.
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt pytest
+
+      - name: Run the tests
+        run: pytest -v

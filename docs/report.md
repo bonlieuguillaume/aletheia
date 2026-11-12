@@ -4,7 +4,9 @@ Living document: every design choice of the project, **why** it was made, and
 what remains open. It is updated as the work progresses; the task list itself
 lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects/5).
 
-Status: v0.1 not started (data being prepared). Last update: 2026-11-12.
+Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation),
+not yet run on real data; scenes being prepared. Last update: 2026-11-12.
+Architecture and metric procedure of v0.1: [architecture_v0.1.md](architecture_v0.1.md).
 
 ## 1. Goal and scope
 
@@ -156,6 +158,16 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     is the fallback if small pastes are poorly detected at level 4.
   - *Why keep BCE:* it penalizes every falsely flagged pixel, including on
     authentic patches, where batch Dice dilutes false alarms.
+- **Input scale**: linear values converted to dB, then **one global
+  normalization** (mean / std of the authentic training patches).
+  - *Why not per patch:* per-patch standardization would erase the
+    radiometric differences between regions, which splicing detection (v0.3)
+    relies on.
+- **No augmentation by default.** Flips and rotations change the apparent
+  radar look direction (shadow and layover on the other side), which never
+  happens in real data: to be tested, not assumed.
+- **Checkpoint selection on the validation loss** (threshold-free); early
+  stopping after 8 epochs without improvement.
 - Output size: modern U-Nets pad their convolutions, so a 512x512 input
   gives a 512x512 map (input divisible by 2^depth).
 - **Borders:** near the patch edge the network lacks context and the padding
@@ -206,7 +218,14 @@ over it at scene level, cut the 512x512 window, run `predict`. At 10 m a
   and the upstream preprocessing. Colab installs with pip on its own VM,
   nothing is installed on the PC.
 - Notebooks are thin drivers of `.py` modules, versioned in the repo and
-  opened in Colab from GitHub.
+  opened in Colab from GitHub. Code layout: one folder per feature in
+  `features/` (`tiling`, `copy_move`, `unet`, `evaluation`, plus the
+  `sar_io` library), each with its README.
+- Each Colab step reads its input from Drive and writes its output back
+  (patches zip, dataset zip, run folder), so steps can run in separate
+  sessions.
+- **Tests on GitHub Actions** at every push: synthetic data, CPU, nothing on
+  the user's PC ([github_actions.md](github_actions.md)).
 - Data and checkpoints on Google Drive (paid plan: the 10 scenes take ~20 GB);
   inputs copied to the VM's local disk before training; checkpoints written
   back to Drive so a disconnected session can resume.
