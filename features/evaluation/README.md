@@ -5,7 +5,9 @@ module knows nothing about the model. Full procedure:
 `docs/architecture_v0.1.md`.
 
 - **Module** `evaluation.py`: `mcc`, `f1`, `image_score`,
-  `sample_statistics`, `collect_statistics`, `choose_thresholds` (on val),
+  `sample_statistics`, `collect_statistics`, `best_image_threshold` (middle
+  of the interval of equally good thresholds, and its width = margin),
+  `choose_thresholds` (on val; ties between score methods broken by margin),
   `compute_metrics` (on test, with frozen settings), `metrics_by_group`,
   `plot_sample`.
 - **Notebook** `evaluation.ipynb` drives the evaluation of a trained run on

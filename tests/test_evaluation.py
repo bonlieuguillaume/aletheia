@@ -56,3 +56,30 @@ def test_full_procedure_with_a_perfect_model(dataset_dir):
     assert summary["pixel_mcc_mean"] == 1.0
     assert summary["false_alarm_mean"] == 0.0
     assert "scene" in table.columns  # joined with the manifest
+
+
+def test_image_threshold_is_the_middle_of_the_best_interval():
+    # Authentic scores up to 0.3, forged from 0.8: every threshold in
+    # (0.3, 0.8] is perfect. The middle, 0.55, is kept, not the edge 0.8.
+    scores = [0.1, 0.2, 0.3, 0.8, 0.9]
+    labels = [0, 0, 0, 1, 1]
+    threshold, value, margin = ev.best_image_threshold(scores, labels)
+    assert value == 1.0
+    assert abs(threshold - 0.55) < 1e-9
+    assert abs(margin - 0.5) < 1e-9
+
+
+def test_tied_score_methods_are_split_by_their_margin():
+    # Every method separates the classes perfectly, but only by 0.005, except
+    # top2% (by 0.5): at equal MCC, the widest margin wins, not the first method.
+    stats = []
+    for label, narrow, wide in [(0, 0.980, 0.2), (0, 0.985, 0.3), (1, 0.990, 0.8), (1, 0.995, 0.9)]:
+        sample = {"label": label, "pixel_counts": [(10, 0, 0, 90)] * len(ev.PIXEL_THRESHOLDS)}
+        for method in ev.SCORE_METHODS:
+            sample[f"score_{method}"] = narrow
+        sample["score_top2%"] = wide
+        stats.append(sample)
+
+    settings = ev.choose_thresholds(stats)
+    assert settings["score_method"] == "top2%"
+    assert abs(settings["image_threshold"] - 0.55) < 1e-9

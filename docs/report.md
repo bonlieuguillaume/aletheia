@@ -322,6 +322,34 @@ image MCC 0.944, mean pixel MCC 0.979 at epoch 15.
   validate the pipeline, not the difficulty of the problem (levels 2-4,
   #25-#27).
 
+**Settings chosen on val** (`eval/settings.json`): score `top0.5%`, image
+threshold 0.997, pixel threshold 0.30 (val image MCC 0.993, val mean pixel
+MCC 0.979).
+
+**Test results (official v0.1, level 1)** (`eval/summary_test.json`):
+
+| Metric | Test |
+|---|---|
+| Image MCC / F1 / ROC AUC | **1.000** / 1.000 / 1.000 (400 TP, 0 FP, 0 FN, 400 TN) |
+| Pixel MCC, mean per forged patch | **0.993** (0.993 without the 16-px border) |
+| Pixel F1, mean per forged patch | 0.993 |
+| Pixel MCC / F1, global | 0.993 / 0.993 |
+| False alarms on authentic patches (fraction of pixels) | 3.5e-7, i.e. ~0.09 pixel per patch |
+
+- **Saturated probabilities.** The image thresholds chosen on val sat at
+  the top of the scale (max: 1.000, top0.5%: 0.997, p99.5: 0.993): even
+  authentic patches hold a few pixels at ~1, the over-confidence of
+  section 4. Four methods tied at the same val MCC (0.993, ~3 errors out of
+  800) and the first of the list won, although `top2%` reached it with a
+  threshold of 0.46, far from saturation, hence far more robust.
+- **Rule changed after this run, on val evidence only:** the image
+  threshold is now the middle of the interval of equally good thresholds
+  (not its lower edge), and ties between score methods go to the widest
+  interval (`best_image_threshold`, `choose_thresholds`). The test results
+  above were obtained with the former rule and stay the official v0.1
+  figures; the new rule applies from the next run. Re-evaluating this run
+  with it would mean using the test set twice.
+
 ## 6. Presentation example
 
 Built **by hand** (#11): choose a forest scene and a base, paste forest

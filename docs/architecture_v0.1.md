@@ -266,8 +266,13 @@ Step by step:
      (false alarms).
 3. **Settings, on the validation set** (`choose_thresholds`):
    - image level: for each score method, every distinct score value is tried
-     as a threshold ("forged" if score >= threshold); the method and threshold
-     giving the best **image MCC** are kept;
+     as a threshold ("forged" if score >= threshold). Neighbouring thresholds
+     often reach the same best **image MCC**: they form an interval of equally
+     good thresholds, and its **middle** is kept, not its lower edge, so that a
+     small shift of the scores on new images changes fewer decisions; the
+     width of that interval is the **margin**. The method with the best image
+     MCC is kept; between methods with the same MCC, the one with the widest
+     margin (the most robust), not the first of the list;
    - pixel level: the threshold giving the best **mean per-patch pixel MCC**
      over the forged patches is kept;
    - the three settings are written to `eval/settings.json` and frozen.
@@ -467,6 +472,10 @@ $$FA = \frac{1}{|\Omega|} \sum_{i \in \Omega} \mathbb{1}[p_i \geq \tau_{pix}]$$
 **Settings chosen on the validation set** (`evaluation.choose_thresholds`):
 
 $$(\text{method}^*, \tau_{img}^*) = \arg\max_{\text{method}, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^* = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
+
+with $\tau_{img}^*$ taken in the middle of the interval of thresholds that
+reach the best MCC, and ties between methods broken by the width of that
+interval (the margin).
 
 **ROC AUC** (image level, threshold-free): the probability that a randomly
 chosen forged patch gets a higher score than a randomly chosen authentic one

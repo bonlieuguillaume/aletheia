@@ -238,21 +238,55 @@ def collect_statistics(predictions, margin=BORDER_MARGIN, save_maps_dir=None):
 # ---------------------------------------------------------------------------
 
 def best_image_threshold(scores, labels):
-    """Return the image threshold that maximizes the MCC, and that MCC.
+    """Return the image threshold that maximizes the MCC, that MCC, and its margin.
 
-    Every distinct score is tried as a threshold (score >= threshold means
-    "forged").
+    Every distinct score is tried. With the distinct scores sorted,
+    s_0 < s_1 < ..., the threshold s_j calls "forged" every score >= s_j,
+    and any threshold in (s_{j-1}, s_j] gives exactly the same decisions.
+    Several neighbouring s_j often reach the best MCC: together they form an
+    interval of equally good thresholds. The MIDDLE of the widest such
+    interval is returned, not its lower edge: it leaves the same room on both
+    sides, so a small shift of the scores on new images changes fewer
+    decisions. The width of the interval is returned as the margin.
+
+    Returns
+    -------
+    threshold : float
+    best_mcc : float
+    margin : float
+        Width of the interval of equally good thresholds (0 to 1).
     """
-    scores = np.asarray(scores)
+    scores = np.asarray(scores, dtype=np.float64)
     labels = np.asarray(labels).astype(bool)
+    candidates = np.unique(scores)  # sorted, distinct
 
-    best_threshold, best_mcc = 0.5, -1.0
-    for threshold in np.unique(scores):
+    values = []
+    for threshold in candidates:
         c = confusion_counts(scores >= threshold, labels)
-        value = mcc(c["tp"], c["fp"], c["fn"], c["tn"])
-        if value > best_mcc:
-            best_threshold, best_mcc = float(threshold), value
-    return best_threshold, best_mcc
+        values.append(mcc(c["tp"], c["fp"], c["fn"], c["tn"]))
+    best_mcc = max(values)
+
+    # Walk through the runs of consecutive candidates that reach the best MCC
+    # and keep the widest one.
+    best_lower, best_upper = 0.0, float(candidates[0])
+    best_margin = -1.0
+    j = 0
+    while j < len(candidates):
+        if not np.isclose(values[j], best_mcc):
+            j += 1
+            continue
+        start = j
+        while j + 1 < len(candidates) and np.isclose(values[j + 1], best_mcc):
+            j += 1
+        # Thresholds in (lower, upper] all give the decisions of candidate `start`..`j`.
+        lower = float(candidates[start - 1]) if start > 0 else 0.0
+        upper = float(candidates[j])
+        if upper - lower > best_margin:
+            best_lower, best_upper, best_margin = lower, upper, upper - lower
+        j += 1
+
+    threshold = (best_lower + best_upper) / 2.0
+    return threshold, float(best_mcc), float(best_margin)
 
 
 def mean_pixel_metrics(all_stats, threshold_index, key="pixel_counts"):
@@ -270,26 +304,36 @@ def mean_pixel_metrics(all_stats, threshold_index, key="pixel_counts"):
 def choose_thresholds(val_stats):
     """Choose every setting on the validation set (step 3 of the procedure).
 
-    1. For each score method, the image threshold maximizing the image MCC;
-       the method with the best MCC is kept.
+    1. For each score method, the image threshold maximizing the image MCC
+       (middle of the interval of equally good thresholds, see
+       `best_image_threshold`); the method with the best MCC is kept, and
+       between methods with the same MCC, the one with the widest margin
+       (the most robust), not simply the first of the list.
     2. The pixel threshold maximizing the mean per-patch pixel MCC.
 
     Returns
     -------
     dict
-        score_method, image_threshold, pixel_threshold, and the validation
-        MCCs reached, to be frozen and applied to the test set.
+        score_method, image_threshold, image_threshold_margin,
+        pixel_threshold, and the validation MCCs reached, to be frozen and
+        applied to the test set.
     """
     labels = [s["label"] for s in val_stats]
 
     # 1. Image level: best (method, threshold) pair.
-    best = {"image_mcc_val": -1.0}
+    best = {"image_mcc_val": -1.0, "image_threshold_margin": -1.0}
     for method in SCORE_METHODS:
         scores = [s[f"score_{method}"] for s in val_stats]
-        threshold, value = best_image_threshold(scores, labels)
-        print(f"  val image MCC with {method:8s}: {value:.3f} (threshold {threshold:.3f})")
-        if value > best["image_mcc_val"]:
-            best = {"score_method": method, "image_threshold": threshold, "image_mcc_val": value}
+        threshold, value, margin = best_image_threshold(scores, labels)
+        print(f"  val image MCC with {method:8s}: {value:.3f} "
+              f"(threshold {threshold:.3f}, margin {margin:.3f})")
+
+        better = value > best["image_mcc_val"] and not np.isclose(value, best["image_mcc_val"])
+        tied_but_wider = (np.isclose(value, best["image_mcc_val"])
+                          and margin > best["image_threshold_margin"])
+        if better or tied_but_wider:
+            best = {"score_method": method, "image_threshold": threshold,
+                    "image_threshold_margin": margin, "image_mcc_val": value}
 
     # 2. Pixel level: best threshold of the grid.
     best_index, best_pixel_mcc = 0, -1.0
