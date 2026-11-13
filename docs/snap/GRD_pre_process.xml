@@ -5,22 +5,26 @@
 
   Per scene, only these change:
   - ${input}: the GRD product (.zip / .SAFE) given to Read;
-  - ${output}: the GeoTIFF written by Write;
+  - ${output}: the BEAM-DIMAP product (.dim) written by Write;
   - the UTM zone of Terrain-Correction (mapProjection; zone 20 South here);
   - pixelRegion of Read, filled in by the Graph Builder with the size of the
     product it was opened on (25514 x 14425 here): remove it or update it for
     another product.
 
+  Remove-GRD-Border-Noise runs on every scene: ESA's IPF removes the border
+  noise itself since version 2.90 (March 2018), but some v0.1 products are
+  older; on a recent product it changes little.
+
   nodataValueAtSea ("Mask out areas without elevation" in Terrain-Correction)
   sets pixels without DEM value, i.e. the open sea, to 0 = no-data: fine for
   land scenes, but switch it off to reuse this graph on maritime scenes.
 
-  Output: in practice the graph is run with BEAM-DIMAP as output format (it
-  did not run with GeoTIFF-BigTIFF). The tiling reads the Sigma0_VV band of
-  the .data/ folder directly (ENVI .hdr + .img); a GeoTIFF export (File >
-  Export) is optional, only to look at the scene in other software.
+  Output: BEAM-DIMAP (the graph did not run with GeoTIFF-BigTIFF). The tiling
+  reads the Sigma0_VV band of the .data/ folder directly (ENVI .hdr + .img);
+  a GeoTIFF export (File > Export) is optional, only to look at the scene in
+  other software.
 
-  Command line: gpt GRD_pre_process.xml -Pinput=<product> -Poutput=<file.tif>
+  Command line: gpt GRD_pre_process.xml -Pinput=<product> -Poutput=<file.dim>
 -->
 <graph id="Graph">
   <version>1.0</version>
@@ -50,7 +54,7 @@
   <node id="Calibration">
     <operator>Calibration</operator>
     <sources>
-      <sourceProduct refid="ThermalNoiseRemoval"/>
+      <sourceProduct refid="Remove-GRD-Border-Noise"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <sourceBands/>
@@ -134,6 +138,17 @@
       <externalAuxFile/>
     </parameters>
   </node>
+  <node id="Remove-GRD-Border-Noise">
+    <operator>Remove-GRD-Border-Noise</operator>
+    <sources>
+      <sourceProduct refid="ThermalNoiseRemoval"/>
+    </sources>
+    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
+      <selectedPolarisations/>
+      <borderLimit>500</borderLimit>
+      <trimThreshold>0.5</trimThreshold>
+    </parameters>
+  </node>
   <node id="Write">
     <operator>Write</operator>
     <sources>
@@ -141,29 +156,31 @@
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <file>${output}</file>
-      <formatName>GeoTIFF</formatName>
+      <formatName>BEAM-DIMAP</formatName>
     </parameters>
   </node>
   <applicationData id="Presentation">
-    <Description>Brouillon pour orthorectification de SLC
-</Description>
+    <Description/>
     <node id="Read">
             <displayPosition x="11.0" y="141.0"/>
     </node>
     <node id="Apply-Orbit-File">
-      <displayPosition x="91.0" y="142.0"/>
+      <displayPosition x="84.0" y="98.0"/>
     </node>
     <node id="Calibration">
-      <displayPosition x="358.0" y="144.0"/>
+      <displayPosition x="323.0" y="140.0"/>
     </node>
     <node id="ThermalNoiseRemoval">
-      <displayPosition x="204.0" y="144.0"/>
+      <displayPosition x="129.0" y="140.0"/>
     </node>
     <node id="Terrain-Correction">
-      <displayPosition x="439.0" y="145.0"/>
+      <displayPosition x="403.0" y="102.0"/>
+    </node>
+    <node id="Remove-GRD-Border-Noise">
+      <displayPosition x="216.0" y="100.0"/>
     </node>
     <node id="Write">
-      <displayPosition x="566.0" y="141.0"/>
+      <displayPosition x="508.0" y="143.0"/>
     </node>
   </applicationData>
 </graph>
