@@ -181,7 +181,7 @@ flowchart TB
     FROZEN --> TESTM["TEST: apply the frozen settings"]
     TESTM --> IMG["Image level<br/>MCC, F1, AUC"]
     TESTM --> PIX["Pixel level, forged patches<br/>MCC, F1 (mean per patch, global,<br/>without the 16-px border)"]
-    TESTM --> FA["Authentic patches<br/>fraction of flagged pixels"]
+    TESTM --> FA["Authentic patches<br/>fraction of flagged pixels<br/>(also without the 16-px border)"]
 ```
 
 Step by step:
@@ -216,7 +216,14 @@ Step by step:
      pooled, each pixel counts the same); the mean MCC is also given without
      the border band;
    - **authentic patches**: mean fraction of pixels flagged by mistake
-     (ideally 0).
+     (ideally 0), also given without the border band. For each authentic
+     patch, the map is thresholded with the frozen pixel threshold, and
+     `false_alarm` = flagged pixels / all pixels of the patch. MCC and F1 do
+     not apply there (an authentic patch has no forged pixel, so every flagged
+     pixel is a false positive and there is nothing to find). This is a
+     pixel-level notion, distinct from the image-level false positive: a
+     patch can have a few flagged pixels and still be declared authentic if
+     its image score stays below the image threshold.
 5. **Breakdown.** The per-sample table is joined with the manifest, so the
    results can be sliced by level, paste size or scene.
 
@@ -246,11 +253,28 @@ data, since the mask already separates `1` (pasted) from `2` (source).
 
 ### What "without a 16-px border" measures (#32)
 
-Every pixel metric is computed twice: on the full 512x512 patch, and on the
-central 480x480 square only, ignoring a 16-px band along the four edges,
-where the network sees less context. Close values: borders are fine; a clearly
-better score without the band: predictions degrade near the borders. It is a
-measurement only, computed at no extra cost, the model is not changed. At
+Two figures are computed a second time on the central 480x480 square only,
+ignoring a 16-px band along the four edges, where the network sees less
+context:
+
+- `pixel_mcc_mean_margin`: mean pixel MCC over the forged patches;
+- `false_alarm_mean_margin`: mean fraction of flagged pixels over the
+  authentic patches, i.e. flagged pixels of the central square / 230,400
+  (= 480 x 480) instead of flagged pixels of the patch / 262,144.
+
+(per patch: `pixel_mcc_margin` and `false_alarm_margin` in the results
+table). Everything else (loss, checkpoint, thresholds, image score, image
+metrics, pixel F1, global pixel MCC) uses the full patch: the band is a
+diagnostic only, computed at no extra cost, and the model is not changed.
+
+How to read it: the band is 12 % of the patch. If false alarms were spread
+evenly, the two fractions would be equal; if `false_alarm_mean_margin` is
+clearly lower, false alarms concentrate near the borders. Example: an
+authentic patch with 300 flagged pixels, 200 of them in the band:
+300 / 262,144 = 0.11 % on the full patch, 100 / 230,400 = 0.04 % without the
+band, so two thirds of its false alarms come from a band covering 12 % of the
+patch. Likewise, a clearly better `pixel_mcc_mean_margin` means predictions
+degrade near the borders. At
 level 1 pastes stay at least 32 px from the border, so the band never contains
 the pasted region: the gap then only reflects false alarms near the edges (a
 check that reflection padding, #31, does its job). From level 2 on, pastes may
