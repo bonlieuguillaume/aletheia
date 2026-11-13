@@ -489,9 +489,9 @@ $$FA = \frac{1}{|\Omega|} \sum_{i \in \Omega} \mathbb{1}[p_i \geq \tau_{pix}]$$
 
 **Settings chosen on the validation set** (`evaluation.choose_thresholds`):
 
-$$(\text{method}^*, \tau_{img}^*) = \arg\max_{\text{method}, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^* = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
+$$(\text{method}^{\star}, \tau_{img}^{\star}) = \arg\max_{\text{method}, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^{\star} = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
 
-with $\tau_{img}^*$ taken in the middle of the interval of thresholds that
+with $\tau_{img}^{\star}$ taken in the middle of the interval of thresholds that
 reach the best MCC, and ties between methods broken by the width of that
 interval (the margin).
 
