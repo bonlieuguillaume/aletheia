@@ -37,7 +37,10 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     online is a single grayscale picture. Other polarisations: #34.
 - **10 full scenes, forest only for now**, matching the use case (forests in
   Ukraine hiding military bases). Diversity is sought within forest:
-  regions, ascending/descending orbits, seasons.
+  regions, ascending/descending orbits, seasons. v0.1 uses 10 South American
+  scenes (Amazon rain forest and Gran Chaco dry forest, 2017-2025, 8
+  descending + 2 ascending), listed with their Sentinel-1 product in
+  [v0.1_south_american_forest.csv](v0.1_south_american_forest.csv).
   - *Known limit:* a model trained on forest only is not expected to
     generalize to other land covers.
 - **Orbits balanced: ideally 5 ascending + 5 descending**, the orbit written
@@ -61,13 +64,13 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - Read: whole product, no subset;
   - Apply-Orbit-File: precise orbits (`continueOnFail`: falls back silently
     to less accurate orbits if they are missing);
-  - ThermalNoiseRemoval (VV), negative values clipped to 0. No
-    Border-Noise-Removal: ESA's IPF removes the GRD border noise itself
-    since version 2.90 (March 2018). **Open:** two v0.1 scenes are older
-    (ds_forest_4, 2017-12-20; ds_forest_10, 2017-08-04) and may still carry
-    it, unless ESA reprocessed them: check the IPF version in their
-    `manifest.safe`, and add Border-Noise-Removal for them if it is below
-    2.90;
+  - ThermalNoiseRemoval (VV), negative values clipped to 0;
+  - Border-Noise-Removal, **for every scene**. ESA's IPF removes the GRD
+    border noise itself since version 2.90 (March 2018), but two v0.1
+    scenes are older (ds_forest_4, 2017-12-20; ds_forest_10, 2017-08-04).
+    Running it on all scenes keeps a single graph; on a recent product it
+    is expected to change little (at most a few low-value pixels at the
+    swath edges set to 0, i.e. no-data) for a small extra cost;
   - Calibration: **Sigma0 VV, linear intensity** (not dB, not amplitude), so
     `input_scale = "linear"`, and the ENL of v0.2 is computed on intensity;
   - Terrain-Correction: Copernicus 30 m DEM, **bilinear image resampling**,
