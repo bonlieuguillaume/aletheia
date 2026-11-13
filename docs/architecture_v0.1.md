@@ -473,7 +473,13 @@ coefficient.
 $$\mathrm{MCC}_{mean} = \frac{1}{K} \sum_{k=1}^{K} \mathrm{MCC}(\text{counts}_k), \qquad \mathrm{MCC}_{global} = \mathrm{MCC}\Big(\sum_{k=1}^{K} \text{counts}_k\Big)$$
 
 In the mean, each paste counts the same; in the global value, each pixel does
-(large pastes weigh more).
+(large pastes weigh more). So in the mean, a missed 2 % paste lowers the
+score as much as a missed 5 % one, while in the global value a model that
+finds the large pastes and misses the small ones can still score well. The
+**mean is the main pixel metric** (it is also the one the pixel threshold is
+chosen on): we want every forgery located, whatever its size. Two close
+values (0.9926 and 0.9929 on the v0.1 test) mean the localization does not
+depend on the paste size.
 
 **False alarms** on an authentic patch, over a pixel set $\Omega$ (the whole
 patch, $|\Omega| = 262{,}144$, or the central square without the 16-px band,
