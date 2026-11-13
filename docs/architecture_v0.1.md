@@ -349,12 +349,18 @@ For an authentic patch, $t_i = 0$ and $v_i = 1$ everywhere.
 **Loss** (`unet.loss_function`), sums over all pixels of all patches of the
 batch:
 
-$$\mathrm{BCE} = \frac{\sum_i v_i \, \ell_i}{\sum_i v_i}, \qquad \ell_i = -\big[t_i \log p_i + (1 - t_i) \log(1 - p_i)\big]$$
+$$\mathrm{BCE} = \frac{\sum_i v_i \cdot \ell_i}{\sum_i v_i}, \qquad \ell_i = -\big[t_i \log p_i + (1 - t_i) \log(1 - p_i)\big]$$
 
-$$\mathrm{Dice}_{batch} = \frac{2 \sum_i v_i \, p_i \, t_i}{\sum_i v_i \, p_i + \sum_i v_i \, t_i + \varepsilon}, \qquad \mathcal{L} = \mathrm{BCE} + (1 - \mathrm{Dice}_{batch})$$
+$$\mathrm{Dice}_{batch} = \frac{2 \sum_i v_i \cdot p_i \cdot t_i}{\sum_i v_i \cdot p_i + \sum_i v_i \cdot t_i + \varepsilon}, \qquad \mathcal{L} = \mathrm{BCE} + (1 - \mathrm{Dice}_{batch})$$
 
 Multiplying by $v_i$ removes the source pixels from every sum: this is how the
-source is ignored. $\varepsilon = 10^{-6}$ only guards against a division by
+source is ignored. Worked example: 4 pixels, one background ($t = 0$), one
+pasted ($t = 1$), two source ($v = 0$); the per-pixel BCE terms are
+$\ell = (0.1, 0.2, 2.0, 2.0)$, the last two high because the model lights up
+the source. Without $v$: $\mathrm{BCE} = (0.1 + 0.2 + 2.0 + 2.0) / 4 = 1.08$,
+the source is punished. With $v = (1, 1, 0, 0)$:
+$\mathrm{BCE} = (0.1 + 0.2 + 0 + 0) / 2 = 0.15$, as if the source pixels did
+not exist (the denominator, $\sum_i v_i$, counts only the valid pixels). $\varepsilon = 10^{-6}$ only guards against a division by
 zero. It is **not** the smoothing constant $s$ of a per-patch Dice,
 $(2I + s) / (P + T + s)$: that one solves a different problem (an authentic
 patch has an empty mask, so its own Dice would be $0/0$), which the batch Dice
@@ -363,7 +369,7 @@ the fallback for level 4 (#27).
 
 **Image score** (`evaluation.image_score`), from the map of one patch:
 
-$$S_{max} = \max_i p_i, \qquad S_{top\,k} = \text{mean of the } \lceil k N^2 \rceil \text{ largest } p_i, \qquad S_{p99.5} = \text{99.5th percentile of the } p_i$$
+$$S_{max} = \max_i p_i, \qquad S_{top\text{-}k} = \text{mean of the } \lceil k N^2 \rceil \text{ largest } p_i, \qquad S_{p99.5} = \text{99.5th percentile of the } p_i$$
 
 **Confusion counts** at a pixel threshold $\tau$ (`evaluation.confusion_counts`),
 with $\hat{y}_i = \mathbb{1}[p_i \geq \tau]$:
@@ -375,7 +381,7 @@ $\hat{y} = \mathbb{1}[S \geq \tau_{img}]$ and the label of each patch.
 
 **MCC and F1** (`evaluation.mcc`, `evaluation.f1`):
 
-$$\mathrm{MCC} = \frac{TP \cdot TN - FP \cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}, \qquad F_1 = \frac{2\,TP}{2\,TP + FP + FN}$$
+$$\mathrm{MCC} = \frac{TP \cdot TN - FP \cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}, \qquad F_1 = \frac{2 \cdot TP}{2 \cdot TP + FP + FN}$$
 
 MCC is set to 0 when its denominator is 0. $F_1$ at pixel level is the Dice
 coefficient.
@@ -395,7 +401,7 @@ $$FA = \frac{1}{|\Omega|} \sum_{i \in \Omega} \mathbb{1}[p_i \geq \tau_{pix}]$$
 
 **Settings chosen on the validation set** (`evaluation.choose_thresholds`):
 
-$$(\text{method}^*, \tau_{img}^*) = \arg\max_{\text{method},\, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^* = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
+$$(\text{method}^*, \tau_{img}^*) = \arg\max_{\text{method}, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^* = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
 
 **ROC AUC** (image level, threshold-free): the probability that a randomly
 chosen forged patch gets a higher score than a randomly chosen authentic one
