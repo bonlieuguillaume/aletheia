@@ -276,38 +276,28 @@ B only. What should be done with A?
   is the copy is then usually clear from the context (a forest covering a
   base). This is how Vertical 52 presents its own results.
 
-If the model later has to tell A from B, nothing has to be regenerated: the
-mask already separates them (`1` for B, `2` for A); only the counting rule
-changes (see `v_i` in section 6).
+Telling A from B is planned for later (#38): nothing has to be regenerated,
+the mask already separates them (`1` for B, `2` for A); only the counting
+rule changes (see `v_i` in section 6).
 
 ### What "without a 16-px border" measures (#32)
 
-Two figures are computed a second time on the central 480x480 square only,
-ignoring a 16-px band along the four edges, where the network sees less
-context:
+A diagnostic only: two figures are computed again on the central 480x480
+square, ignoring a 16-px band along the edges, where the network sees less
+context. Everything else (loss, thresholds, image metrics...) uses the full
+patch.
 
 - `pixel_mcc_mean_margin`: mean pixel MCC over the forged patches;
 - `false_alarm_mean_margin`: mean fraction of flagged pixels over the
-  authentic patches, i.e. flagged pixels of the central square / 230,400
-  (= 480 x 480) instead of flagged pixels of the patch / 262,144.
+  authentic patches.
 
-(per patch: `pixel_mcc_margin` and `false_alarm_margin` in the results
-table). Everything else (loss, checkpoint, thresholds, image score, image
-metrics, pixel F1, global pixel MCC) uses the full patch: the band is a
-diagnostic only, computed at no extra cost, and the model is not changed.
-
-How to read it: the band is 12 % of the patch. If false alarms were spread
-evenly, the two fractions would be equal; if `false_alarm_mean_margin` is
-clearly lower, false alarms concentrate near the borders. Example: an
-authentic patch with 300 flagged pixels, 200 of them in the band:
-300 / 262,144 = 0.11 % on the full patch, 100 / 230,400 = 0.04 % without the
-band, so two thirds of its false alarms come from a band covering 12 % of the
-patch. Likewise, a clearly better `pixel_mcc_mean_margin` means predictions
-degrade near the borders. At
-level 1 pastes stay at least 32 px from the border, so the band never contains
-the pasted region: the gap then only reflects false alarms near the edges (a
-check that reflection padding, #31, does its job). From level 2 on, pastes may
-touch the border and the gap also shows whether they are missed there.
+How to read it: the band covers 12 % of the patch. Equal values with and
+without the band: no border effect. Clearly better values without it: errors
+concentrate near the edges (e.g. 0.11 % of flagged pixels on the full patch
+but 0.04 % without the band means two thirds of the false alarms sit in the
+band). At level 1 pastes stay 32 px away from the border, so the gap only
+reflects border false alarms (a check of reflection padding, #31); from
+level 2 on, it also shows whether pastes touching the border are missed.
 
 Worked example, image level, 400 forged + 400 authentic test patches:
 

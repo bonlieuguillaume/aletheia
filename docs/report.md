@@ -258,7 +258,7 @@ Inpainting (#19), generated images (#20), metadata (#21), robustness to
 formats (#22), attacker-side speckle / multilook (#23), whole-scene
 inference with an overlapping sliding window (#33), other polarisations
 (#34), other sensor: ICEYE GRD, X-band, radar geometry (#35), evaluation at
-realistic prevalence (#36).
+realistic prevalence (#36), telling the pasted region from its source (#38).
 
 ## 9. Open questions
 
