@@ -15,6 +15,10 @@
   sets pixels without DEM value, i.e. the open sea, to 0 = no-data: fine for
   land scenes, but switch it off to reuse this graph on maritime scenes.
 
+  Output: in practice the graph is run with BEAM-DIMAP as output format, then
+  the product is exported to GeoTIFF by hand in SNAP (File > Export); the
+  graph did not run with GeoTIFF-BigTIFF as output.
+
   Command line: gpt GRD_pre_process.xml -Pinput=<product> -Poutput=<file.tif>
 -->
 <graph id="Graph">

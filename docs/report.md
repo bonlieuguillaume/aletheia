@@ -83,10 +83,13 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     scenes (ds_forest_7, ds_forest_9). **To reuse the chain on maritime
     scenes (ships, oil slicks, coasts), switch it off**, or the sea is
     blanked out and tiling rejects every sea patch;
-  - Write: GeoTIFF. A full scene in float32 is ~2.3 GB, beyond what SNAP's
-    own GeoTIFF reader can display (32-bit size overflow past ~2.1 GB, error
-    `capacity < 0`); the file itself is valid. GeoTIFF-BigTIFF, or a subset
-    on the forest area, avoids the issue.
+  - Write: classic GeoTIFF (~2.3 GB per scene in float32, under the 4 GB
+    limit of the format). In practice the graph writes BEAM-DIMAP, then the
+    user exports it to GeoTIFF by hand in SNAP (File > Export): the graph
+    did not run with GeoTIFF-BigTIFF as output. SNAP's own GeoTIFF reader
+    fails to display a file past ~2.1 GB (32-bit size overflow, error
+    `capacity < 0`) but the file is valid, and a different reader opens it.
+    The code reads it with tifffile, which has no such limit.
 - Terrain correction **resamples** the image: neighbouring speckle values
   become slightly correlated, which changes local statistics (relevant for
   v0.2 physical cues).
