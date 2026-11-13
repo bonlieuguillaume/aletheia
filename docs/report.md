@@ -52,11 +52,26 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
 - No speckle filter, no extra multilook. IW GRD is nevertheless **already
   multilooked by ESA** (about 5x1 looks, ENL ~4.4): the speckle is not
   single-look, which matters for any speckle statistic (v0.2).
-- Preprocessed by the user with rosarium / SNAP on their PC (calibration,
-  terrain correction). Each scene comes with the **XML of its SNAP graph**,
-  from which we record: calibration (sigma0 / gamma0 / beta0), scale
-  (linear / dB), terrain-correction resampling method, pixel spacing.
-  *To fill in once the scenes are delivered.*
+- Preprocessed by the user with SNAP 13 on their PC, **one graph shared by
+  all scenes** (`GRD_pre_process.xml`; only the input product and the UTM
+  zone change). The code reads none of it: from each scene it only uses the
+  pixel values of the GeoTIFF and the orbit written in the folder name. The
+  graph:
+  - Read: whole product, no subset;
+  - Apply-Orbit-File: precise orbits (`continueOnFail`: falls back silently
+    to less accurate orbits if they are missing);
+  - ThermalNoiseRemoval (VV), negative values clipped to 0. No
+    Border-Noise-Removal: not needed for products processed by ESA's IPF
+    since 2018, which already removes GRD border noise;
+  - Calibration: **Sigma0 VV, linear intensity** (not dB, not amplitude), so
+    `input_scale = "linear"`, and the ENL of v0.2 is computed on intensity;
+  - Terrain-Correction: Copernicus 30 m DEM, **bilinear image resampling**,
+    10 m pixels, UTM zone of the scene, no radiometric terrain normalization
+    (slopes keep their natural brightness), sea set to no-data;
+  - Write: GeoTIFF. A full scene in float32 is ~2.3 GB, beyond what SNAP's
+    own GeoTIFF reader can display (32-bit size overflow past ~2.1 GB, error
+    `capacity < 0`); the file itself is valid. GeoTIFF-BigTIFF, or a subset
+    on the forest area, avoids the issue.
 - Terrain correction **resamples** the image: neighbouring speckle values
   become slightly correlated, which changes local statistics (relevant for
   v0.2 physical cues).
