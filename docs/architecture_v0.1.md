@@ -333,7 +333,7 @@ $$x^{dB}_i = 10 \log_{10}\big(\max(x_i, 10^{-6})\big), \qquad \tilde{x}_i = \fra
 **Level-1 paste size** (`copy_move.random_rectangle_size`): area fraction
 $a \sim \mathcal{U}[0.02, 0.05]$, aspect ratio $r = h / w \sim \mathcal{U}[0.5, 2]$:
 
-$$h = \operatorname{round}\big(\sqrt{a N^2 r}\big), \qquad w = \operatorname{round}\big(\sqrt{a N^2 / r}\big)$$
+$$h = \mathrm{round}\big(\sqrt{a N^2 r}\big), \qquad w = \mathrm{round}\big(\sqrt{a N^2 / r}\big)$$
 
 **East-west mirror** (`tiling.mirror_east_west`): a look direction $d$
 (degrees from north) becomes $360° - d$; ascending $78° \mapsto 282°$ =
