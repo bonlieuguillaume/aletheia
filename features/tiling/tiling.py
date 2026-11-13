@@ -333,7 +333,9 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
     patch_counter = 0
     for scene_index, (scene_name, tif_path) in enumerate(sorted(scenes.items())):
         print(f"Reading {tif_path.name} ...")
-        image = read_tif(tif_path).astype(np.float32)
+        # copy=False: no second copy if the file is already float32 (a full
+        # scene is ~2 GB, the Colab VM has ~12 GB of RAM).
+        image = read_tif(tif_path).astype(np.float32, copy=False)
         scene_width = image.shape[1]
         if scene_name in mirrored:
             image = mirror_east_west(image)
