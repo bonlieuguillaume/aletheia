@@ -14,3 +14,7 @@ runs/
 *.zip
 *.tif
 *.tiff
+
+# Local data folders of the user: entirely ignored (scenes, XML, patches...)
+data/data_raw/
+data/data_set/

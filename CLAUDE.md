@@ -60,9 +60,10 @@ Code is organised as one feature per folder of `features/` (module + notebook
   value from whenever the cell was last read. Re-read the cell immediately
   before writing it, carry the current values across verbatim, and if a value
   cannot be confirmed, ask instead of guessing.
-- `data/` is the user's local storage, never versioned except its `.gitkeep`
-  files: `data/data_raw/` (preprocessed scenes + SNAP XML) and
-  `data/data_set/` (patches / datasets). The notebooks read from and write to
+- `data/` is the user's local storage, never versioned (only `data/.gitkeep`
+  is): `data/data_raw/` (preprocessed scenes + SNAP XML) and `data/data_set/`
+  (patches / datasets) are entirely ignored by git and may hold shortcuts or
+  links to other folders. The notebooks read from and write to
   Google Drive (`MyDrive/aletheia/data/...`), not from this folder. Each
   feature documents which folder it reads and which it writes; keep the
   producer and the consumer in sync when changing one.
