@@ -229,27 +229,56 @@ Step by step:
 
 ### Why the source pixels are ignored
 
-In a naive copy-move, the source region and the pasted region are identical
-pixel for pixel: from the image alone, nothing says which of the two twins is
-the original. So the source (`mask == 2`) is left out of both the **loss**
-and the **pixel metrics**, counted neither as a hit nor as a false alarm:
+**The problem.** A copy-move copies a region A (the **source**, `mask == 2`)
+and pastes it at B (the **target**, `mask == 1`). B becomes an exact copy of
+A, pixel for pixel:
 
-- counting it as a **false alarm** would penalize every method that flags it,
-  although that is often unavoidable: duplicate-finding methods (block
-  correlation, the Vertical 52 keypoint matching) always flag both twins, and
-  the U-Net may learn the "duplicated texture" cue too;
-- counting it as a **hit** would reward flagging a region that is not forged.
+```
+  forged patch
+  +--------------------+
+  |   +--+             |
+  |   |A |             |   A = the original (genuine)
+  |   +--+             |
+  |           +--+     |
+  |           |B |     |   B = the copy (the forgery)
+  |           +--+     |
+  +--------------------+
+```
 
-**The trade-off.** The model is free to light up the source, so in practice
-its map may show two regions, the copy and the original, the latter being a
-false positive on genuine pixels; the larger the paste, the larger that area.
-In exchange, the model does not have to decide which twin is the copy, so it
-can rely fully on the duplication cue to find the pasted region, and the
-methods are compared on equal terms. For an analyst, two twin regions lit up
-point straight at the duplication, which is how Vertical 52 shows its results.
-A model *can* in principle tell them apart (only the pasted region has
-artificial seams with its surroundings); measuring that later needs no new
-data, since the mask already separates `1` (pasted) from `2` (source).
+From the image, one sees two identical regions, but almost nothing says which
+one is the original: the only clue is subtle (B has artificial seams with its
+new surroundings, A does not). A detector will therefore often find "there is
+a duplicate here" and light up **both A and B**, although the right answer is
+B only. What should be done with A?
+
+**The three options.**
+
+| Option | Consequence |
+|---|---|
+| Count A as a **false alarm** | Punishes the model for something almost impossible to avoid, and punishes duplicate-finding methods (block correlation, Vertical 52 keypoint matching), which by construction always find both twins. |
+| Count A as a **hit** | Rewards lighting up a region that is genuine: wrong. |
+| **Ignore A** (chosen) | A's pixels count neither as an error nor as a success, in the **loss** and in the **pixel metrics**. The model is judged on two questions only: does it find B, and does it light up the rest of the patch by mistake? |
+
+**The trade-off of ignoring A.**
+
+- *Gained:* simpler learning (the model can rely fully on the cue "these two
+  regions are identical" to find B, without being held back by having to
+  guess which twin is the copy) and a fair comparison (U-Net, block
+  correlation and Vertical 52 are scored the same way, although the last two
+  always light up A and B).
+- *Accepted:* the model is never punished for lighting up A, so in practice
+  its map will often show two regions: B, the real forgery, and A, genuine
+  pixels lit up by mistake. That false positive is **not counted** by our
+  metrics. And since A and B have the same size, **the larger the paste, the
+  larger that genuine area lit up by mistake**.
+- *Why the cost is acceptable:* for an analyst, two twin regions lit up lead
+  straight to the right conclusion, "this region was duplicated"; which twin
+  is the copy is then usually clear from the context (a forest covering a
+  base). This is how Vertical 52 presents its own results.
+
+If the model later has to tell A from B, nothing has to be regenerated: the
+mask already separates them (`1` for B, `2` for A); only the counting rule
+changes (see `v_i` in section 6).
 
 ### What "without a 16-px border" measures (#32)
 
@@ -298,7 +327,91 @@ model that flags nothing is 97 % accurate, but its F1 and MCC are 0.
 | flags nothing | 97 % | 0 | 0 |
 | 7,000 / 7,900 pasted pixels found, 600 false alarms | 99.4 % | 0.90 | 0.90 |
 
-## 6. Reproducibility
+## 6. Key formulas
+
+Notation: a patch has $N \times N$ pixels ($N = 512$), indexed by $i$; $x_i$
+is the raw SAR value, $m_i \in \{0, 1, 2\}$ the mask, $z_i$ the network output
+(logit) and $p_i = \sigma(z_i) = 1 / (1 + e^{-z_i})$ the probability that the
+pixel was pasted.
+
+**Input** (`unet.to_model_scale`, `compute_normalization`): conversion to dB,
+then one global standardization, with $\mu, \sigma$ computed on authentic
+training patches only:
+
+$$x^{dB}_i = 10 \log_{10}\big(\max(x_i, 10^{-6})\big), \qquad \tilde{x}_i = \frac{x^{dB}_i - \mu}{\sigma}$$
+
+**Level-1 paste size** (`copy_move.random_rectangle_size`): area fraction
+$a \sim \mathcal{U}[0.02, 0.05]$, aspect ratio $r = h / w \sim \mathcal{U}[0.5, 2]$:
+
+$$h = \operatorname{round}\big(\sqrt{a N^2 r}\big), \qquad w = \operatorname{round}\big(\sqrt{a N^2 / r}\big)$$
+
+**East-west mirror** (`tiling.mirror_east_west`): a look direction $d$
+(degrees from north) becomes $360° - d$; ascending $78° \mapsto 282°$ =
+descending.
+
+**Target and valid pixels**: the forgery to find, and the pixels that count
+(the source is excluded, see section 5):
+
+$$t_i = \mathbb{1}[m_i = 1], \qquad v_i = \mathbb{1}[m_i \neq 2]$$
+
+For an authentic patch, $t_i = 0$ and $v_i = 1$ everywhere.
+
+**Loss** (`unet.loss_function`), sums over all pixels of all patches of the
+batch:
+
+$$\mathrm{BCE} = \frac{\sum_i v_i \, \ell_i}{\sum_i v_i}, \qquad \ell_i = -\big[t_i \log p_i + (1 - t_i) \log(1 - p_i)\big]$$
+
+$$\mathrm{Dice}_{batch} = \frac{2 \sum_i v_i \, p_i \, t_i}{\sum_i v_i \, p_i + \sum_i v_i \, t_i + \varepsilon}, \qquad \mathcal{L} = \mathrm{BCE} + (1 - \mathrm{Dice}_{batch})$$
+
+Multiplying by $v_i$ removes the source pixels from every sum: this is how the
+source is ignored. $\varepsilon = 10^{-6}$ only guards against a division by
+zero. It is **not** the smoothing constant $s$ of a per-patch Dice,
+$(2I + s) / (P + T + s)$: that one solves a different problem (an authentic
+patch has an empty mask, so its own Dice would be $0/0$), which the batch Dice
+avoids since every batch holds forged patches. Per-patch Dice with $s$ is only
+the fallback for level 4 (#27).
+
+**Image score** (`evaluation.image_score`), from the map of one patch:
+
+$$S_{max} = \max_i p_i, \qquad S_{top\,k} = \text{mean of the } \lceil k N^2 \rceil \text{ largest } p_i, \qquad S_{p99.5} = \text{99.5th percentile of the } p_i$$
+
+**Confusion counts** at a pixel threshold $\tau$ (`evaluation.confusion_counts`),
+with $\hat{y}_i = \mathbb{1}[p_i \geq \tau]$:
+
+$$TP = \sum_i v_i \hat{y}_i t_i, \quad FP = \sum_i v_i \hat{y}_i (1 - t_i), \quad FN = \sum_i v_i (1 - \hat{y}_i) t_i, \quad TN = \sum_i v_i (1 - \hat{y}_i)(1 - t_i)$$
+
+At image level, the same counts are taken over patches, with
+$\hat{y} = \mathbb{1}[S \geq \tau_{img}]$ and the label of each patch.
+
+**MCC and F1** (`evaluation.mcc`, `evaluation.f1`):
+
+$$\mathrm{MCC} = \frac{TP \cdot TN - FP \cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}, \qquad F_1 = \frac{2\,TP}{2\,TP + FP + FN}$$
+
+MCC is set to 0 when its denominator is 0. $F_1$ at pixel level is the Dice
+coefficient.
+
+**Mean per patch vs global** (pixel level, over the $K$ forged patches):
+
+$$\mathrm{MCC}_{mean} = \frac{1}{K} \sum_{k=1}^{K} \mathrm{MCC}(\text{counts}_k), \qquad \mathrm{MCC}_{global} = \mathrm{MCC}\Big(\sum_{k=1}^{K} \text{counts}_k\Big)$$
+
+In the mean, each paste counts the same; in the global value, each pixel does
+(large pastes weigh more).
+
+**False alarms** on an authentic patch, over a pixel set $\Omega$ (the whole
+patch, $|\Omega| = 262{,}144$, or the central square without the 16-px band,
+$|\Omega| = 230{,}400$):
+
+$$FA = \frac{1}{|\Omega|} \sum_{i \in \Omega} \mathbb{1}[p_i \geq \tau_{pix}]$$
+
+**Settings chosen on the validation set** (`evaluation.choose_thresholds`):
+
+$$(\text{method}^*, \tau_{img}^*) = \arg\max_{\text{method},\, \tau} \mathrm{MCC}^{val}_{img}, \qquad \tau_{pix}^* = \arg\max_{\tau \in \{0.05, 0.10, \dots, 0.95\}} \mathrm{MCC}^{val}_{mean}(\tau)$$
+
+**ROC AUC** (image level, threshold-free): the probability that a randomly
+chosen forged patch gets a higher score than a randomly chosen authentic one
+(0.5 = chance, 1 = perfect ranking).
+
+## 7. Reproducibility
 
 - Every random draw is seeded: scene split, patch draw (per scene),
   forgeries (per patch), training.
