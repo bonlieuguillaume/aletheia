@@ -5,8 +5,8 @@ what remains open. It is updated as the work progresses; the task list itself
 lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects/5).
 
 Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation);
-the 10 scenes are preprocessed and on Drive, tiling has run (2000 patches);
-copy-move, training and evaluation not yet run. Last update: 2026-11-13.
+scenes preprocessed, tiling (2000 patches), copy-move and a first training
+run done (section 5.1); evaluation not yet run. Last update: 2026-11-13.
 Architecture and metric procedure of v0.1: [architecture_v0.1.md](architecture_v0.1.md).
 
 ## 1. Goal and scope
@@ -296,6 +296,28 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
 - `predict(model, path)` runs on a single patch, for inspection and for the
   presentation example.
 - Comparison with the Vertical 52 keypoint-matching method (#12).
+
+### 5.1 First training run (v0.1, level 1, 2026-11-13)
+
+Run `v0.1_level1_resnet34` (default config, T4, ~100 s per epoch): early
+stopping at epoch 23, **best checkpoint at epoch 15** (val loss 0.0232),
+~38 min. Monitoring metrics on val, fixed threshold 0.5, "max" image score:
+image MCC 0.944, mean pixel MCC 0.979 at epoch 15.
+
+- **Loss and MCC pick different "best" epochs:** epoch 6 has the highest
+  image MCC (0.988) but not the lowest val loss, so it is not the kept
+  checkpoint (see "Val loss and val MCC can diverge" in section 4). Selection
+  stays on the loss: threshold-free, and the epoch MCCs are at a fixed 0.5
+  threshold that the evaluation replaces anyway.
+- **Image MCC below pixel MCC at 0.5:** with the "max" score, one pixel above
+  0.5 is enough to call an authentic patch forged, so a few stray pixels turn
+  into image-level false alarms. The evaluation chooses the score method and
+  the image threshold on val, which is expected to raise the image MCC.
+- Mild over-fitting at the end (train loss 0.006, val loss stuck at
+  0.025-0.03), handled by early stopping.
+- Level 1 (exact copy, speckle included) is the easy case: these scores
+  validate the pipeline, not the difficulty of the problem (levels 2-4,
+  #25-#27).
 
 ## 6. Presentation example
 
