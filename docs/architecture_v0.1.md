@@ -82,19 +82,19 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    IN["VV patch<br/>1 x 512 x 512<br/>dB, normalized"] --> E1
+    IN["VV patch<br/>1 x 512 x 512<br/>dB, normalized"] -- "/2 stride 2" --> E1
 
     subgraph ENC["Encoder: ResNet-34 pretrained on ImageNet"]
         direction TB
-        E1["256 x 256, 64 ch<br/>conv 7x7"] --> E2["128 x 128, 64 ch<br/>3 residual blocks"] --> E3["64 x 64, 128 ch<br/>4 residual blocks"] --> E4["32 x 32, 256 ch<br/>6 residual blocks"] --> E5["16 x 16, 512 ch<br/>3 residual blocks"]
+        E1["256 x 256, 64 ch<br/>conv 7x7"] -- "/2 max-pool" --> E2["128 x 128, 64 ch<br/>3 residual blocks"] -- "/2 stride 2" --> E3["64 x 64, 128 ch<br/>4 residual blocks"] -- "/2 stride 2" --> E4["32 x 32, 256 ch<br/>6 residual blocks"] -- "/2 stride 2" --> E5["16 x 16, 512 ch<br/>3 residual blocks"]
     end
 
     subgraph DEC["Decoder: U-Net, trained from scratch"]
         direction TB
-        D5["32 x 32"] --> D4["64 x 64"] --> D3["128 x 128"] --> D2["256 x 256"] --> D1["512 x 512"]
+        D5["32 x 32"] -- "x2 upsample" --> D4["64 x 64"] -- "x2 upsample" --> D3["128 x 128"] -- "x2 upsample" --> D2["256 x 256"] -- "x2 upsample" --> D1["512 x 512"]
     end
 
-    E5 --> D5
+    E5 -- "x2 upsample" --> D5
     E4 -. skip .-> D5
     E3 -. skip .-> D4
     E2 -. skip .-> D3
@@ -120,6 +120,22 @@ flowchart LR
 If a block has nothing useful to add, it only has to learn F(x) = 0 and the
 signal goes through the shortcut unchanged: this is what lets very deep
 networks train.
+
+**How the size changes** (all inside `smp.Unet`):
+
+- *Encoder, /2 five times:* 512 -> 256 by the first 7x7 convolution with a
+  stride of 2 (the filter moves 2 pixels at a time, so one output value per
+  2 pixels); 256 -> 128 by a 2x2 max-pooling; 128 -> 64 -> 32 -> 16 by the
+  **first block** of stages 2, 3 and 4, whose first convolution has a stride
+  of 2. In those blocks F(x) is smaller than x, so their shortcut goes through
+  a 1x1 convolution with a stride of 2 that brings x to the same size and
+  number of channels before the addition. All other blocks keep the size.
+- *Decoder, x2 five times:* each decoder block (1) upsamples by 2 (each pixel
+  copied into a 2x2 square, nearest-neighbour), (2) concatenates the skip
+  connection of the same size, (3) applies two 3x3 convolutions that keep the
+  size and refine the coarse upsampling with the details of the skip. The
+  last step, 256 -> 512, has no skip (no 512 stage in the encoder); a final
+  3x3 convolution reduces the channels to 1, the probability map.
 
 - **Encoder**: a ResNet-34 (residual blocks, short additive shortcuts) whose
   ImageNet weights give it ready-made edge and texture filters; its first
