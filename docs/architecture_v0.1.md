@@ -268,11 +268,25 @@ Step by step:
    - image level: for each score method, every distinct score value is tried
      as a threshold ("forged" if score >= threshold). Neighbouring thresholds
      often reach the same best **image MCC**: they form an interval of equally
-     good thresholds, and its **middle** is kept, not its lower edge, so that a
+     good thresholds, and its **middle** is kept, not its edge, so that a
      small shift of the scores on new images changes fewer decisions; the
      width of that interval is the **margin**. The method with the best image
      MCC is kept; between methods with the same MCC, the one with the widest
-     margin (the most robust), not the first of the list;
+     margin (the most robust), not the first of the list.
+     - *The bounds of the interval* are the two patches closest to the
+       boundary: the highest score that must stay below the threshold and
+       the lowest score that must be above it. No val patch scores in
+       between, so every threshold in between gives the same decisions.
+       Patches that are on the wrong side whatever the threshold (the errors
+       left at the best MCC) are not bounds: they cannot be recovered.
+     - *Example:* the patch that must stay below scores 0.30, the one that
+       must be above scores 0.97. The former rule took 0.97, touching the
+       patch above; the middle, 0.635, keeps 0.335 on each side. On the
+       first v0.1 run (top0.5% score), the interval was (0.081, 0.997]: the
+       former rule sat at 0.997 although a margin of 0.916 was available.
+     - Same idea as the maximum-margin boundary of support vector machines
+       (SVM): among the boundaries that separate equally well, take the one
+       furthest from the closest points;
    - pixel level: the threshold giving the best **mean per-patch pixel MCC**
      over the forged patches is kept;
    - *Why the scores themselves rather than a grid, for the image threshold:*
