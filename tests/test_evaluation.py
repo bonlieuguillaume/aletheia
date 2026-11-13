@@ -83,3 +83,9 @@ def test_tied_score_methods_are_split_by_their_margin():
     settings = ev.choose_thresholds(stats)
     assert settings["score_method"] == "top2%"
     assert abs(settings["image_threshold"] - 0.55) < 1e-9
+
+
+def test_score_methods_are_described_in_words():
+    for method in ev.SCORE_METHODS:
+        assert ev.describe_score_method(method).startswith("score = ")
+    assert "0.5 % highest" in ev.describe_score_method("top0.5%")

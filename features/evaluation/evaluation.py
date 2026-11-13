@@ -99,6 +99,22 @@ def f1(tp, fp, fn):
 # From a map to an image score (#7)
 # ---------------------------------------------------------------------------
 
+def describe_score_method(method):
+    """Say in words how the image score is computed from the map, for titles.
+
+    The image score is NOT the mean of all the pixels: a paste covers only
+    2-5 % of the patch, so the other pixels would pull the mean towards 0
+    even on a forged patch. It only looks at the highest pixels.
+    """
+    if method == "max":
+        return "score = highest pixel of the map"
+    if method.startswith("top") and method.endswith("%"):
+        return f"score = mean of the {method[3:-1]} % highest pixels of the map"
+    if method.startswith("p"):
+        return f"score = {method[1:]}th percentile of the map"
+    raise ValueError(f"Unknown score method: {method}")
+
+
 def image_score(probability_map, method="max"):
     """Summarize a probability map into one image-level score.
 
