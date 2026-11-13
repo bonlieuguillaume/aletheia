@@ -53,8 +53,9 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   multilooked by ESA** (about 5x1 looks, ENL ~4.4): the speckle is not
   single-look, which matters for any speckle statistic (v0.2).
 - Preprocessed by the user with SNAP 13 on their PC, **one graph shared by
-  all scenes** (`GRD_pre_process.xml`; only the input product and the UTM
-  zone change). The code reads none of it: from each scene it only uses the
+  all scenes** ([snap/GRD_pre_process.xml](snap/GRD_pre_process.xml), local
+  paths replaced by `${input}` / `${output}`; only the input product and the
+  UTM zone change). The code reads none of it: from each scene it only uses the
   pixel values of the GeoTIFF and the orbit written in the folder name. The
   graph:
   - Read: whole product, no subset;
