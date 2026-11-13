@@ -60,9 +60,12 @@ Code is organised as one feature per folder of `features/` (module + notebook
   value from whenever the cell was last read. Re-read the cell immediately
   before writing it, carry the current values across verbatim, and if a value
   cannot be confirmed, ask instead of guessing.
-- `data/` mirrors the Drive layout locally; only the `.gitkeep` files are
-  versioned. Each feature documents which folder it reads and which it
-  writes; keep the producer and the consumer in sync when changing one.
+- `data/` is the user's local storage, never versioned except its `.gitkeep`
+  files: `data/data_raw/` (preprocessed scenes + SNAP XML) and
+  `data/data_set/` (patches / datasets). The notebooks read from and write to
+  Google Drive (`MyDrive/aletheia/data/...`), not from this folder. Each
+  feature documents which folder it reads and which it writes; keep the
+  producer and the consumer in sync when changing one.
 - Experiments must be reproducible: fixed seeds, train/val/test split **by
   scene** (never patches of one scene on both sides), configs versioned in
   the repo, and each run's outputs record the commit and the config they came
