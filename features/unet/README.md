@@ -4,7 +4,9 @@ Issues #9, #10, #31. U-Net with a ResNet-34 encoder pretrained on ImageNet
 (`segmentation_models_pytorch`), 1 input channel (VV), 1 output map.
 
 - **Module** `unet.py`: `train` (with automatic resume), `load_model`,
-  `predict` (one patch), `iterate_predictions` (a whole split, for the
+  `predict` (one patch -> score, decision forged / authentic, probability
+  map, zone called forged; with the settings chosen on val once the
+  evaluation has run), `iterate_predictions` (a whole split, for the
   evaluation), `build_model`, `loss_function`.
 - **Notebook** `unet.ipynb` drives the training on Colab (**GPU runtime**).
 

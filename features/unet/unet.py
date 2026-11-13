@@ -461,23 +461,51 @@ def predict(model, config, patch_or_path):
     """Run the model on ONE patch (a path to a .tif, or a 2-D array).
 
     For inspection, and for the hand-made presentation example (#11).
+    The network computes one probability map; both answers come from it:
+    "is it forged?" (image score vs image threshold), then "where?" (pixels
+    above the pixel threshold), only if the patch is called forged.
+
+    The score method and both thresholds are the ones chosen on the
+    validation set (`eval/settings.json`, merged by `load_model`). Before the
+    evaluation has run they do not exist yet: "max" and 0.5 are used, the
+    same as the monitoring metrics of training.
 
     Returns
     -------
     score : float
-        Image-level score, with the score method of the configuration
-        (the one chosen on the validation set once the evaluation has run).
+        Image-level score.
+    is_forged : bool
+        Decision: score >= image threshold.
     probability_map : numpy.ndarray
         Anomaly map, same size as the patch, values in [0, 1].
+    zone : numpy.ndarray of bool
+        Pixels called forged (probability >= pixel threshold); all False when
+        the patch is called authentic, so that no zone is shown for it.
     """
     if isinstance(patch_or_path, (str, Path)):
         patch = read_tif(patch_or_path)
     else:
         patch = np.asarray(patch_or_path)
 
+    if "image_threshold" not in config:
+        print("No settings chosen on val yet (run the evaluation): using 'max' and 0.5")
+    score_method = config.get("score_method", "max")
+    image_threshold = config.get("image_threshold", 0.5)
+    pixel_threshold = config.get("pixel_threshold", 0.5)
+
     probability_map = predict_probabilities(model, config, [patch])[0]
-    score = image_score(probability_map, config.get("score_method", "max"))
-    return score, probability_map
+
+    # 1. Is it forged?
+    score = image_score(probability_map, score_method)
+    is_forged = bool(score >= image_threshold)
+
+    # 2. Where? Only for a patch called forged.
+    if is_forged:
+        zone = probability_map >= pixel_threshold
+    else:
+        zone = np.zeros(probability_map.shape, dtype=bool)
+
+    return score, is_forged, probability_map, zone
 
 
 def iterate_predictions(model, config, dataset_dir, split, batch_size=8):

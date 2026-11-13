@@ -293,8 +293,11 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
 - Results table `patch -> score, IoU` joined with the manifest, so results
   can be sliced by level, paste size, scene.
 - Predicted maps saved for the test set only (`uint8` `.tif`).
-- `predict(model, path)` runs on a single patch, for inspection and for the
-  presentation example.
+- `predict(model, config, path)` runs on a single patch, for inspection and
+  for the presentation example. The network computes one probability map;
+  `predict` returns the image score, the **decision** (score >= image
+  threshold), the map, and the **zone** (pixels >= pixel threshold, empty if
+  the patch is called authentic), with the settings chosen on val.
 - Comparison with the Vertical 52 keypoint-matching method (#12).
 
 ### 5.1 First training run (v0.1, level 1, 2026-11-13)

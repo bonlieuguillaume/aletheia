@@ -78,9 +78,18 @@ def test_train_resume_and_predict(dataset_dir, tmp_path):
 
     model, config = unet.load_model(run_dir)
     patch = np.random.default_rng(0).gamma(4.4, 0.01, size=(64, 64)).astype(np.float32)
-    score, probability_map = unet.predict(model, config, patch)
+    score, is_forged, probability_map, zone = unet.predict(model, config, patch)
     assert probability_map.shape == (64, 64)
     assert 0.0 <= score <= 1.0
+    assert is_forged == (score >= 0.5)  # no settings chosen on val yet
+    assert zone.shape == (64, 64) and zone.dtype == bool
+    if not is_forged:
+        assert not zone.any()           # no zone for a patch called authentic
+
+    # With settings chosen on val, they are the ones applied.
+    strict = {**config, "score_method": "max", "image_threshold": 1.1, "pixel_threshold": 0.5}
+    score, is_forged, probability_map, zone = unet.predict(model, strict, patch)
+    assert not is_forged and not zone.any()
 
     predictions = list(unet.iterate_predictions(model, config, dataset_dir, "test"))
     assert len(predictions) == 12  # 6 patches x (authentic + forged)
