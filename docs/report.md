@@ -62,13 +62,22 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - Apply-Orbit-File: precise orbits (`continueOnFail`: falls back silently
     to less accurate orbits if they are missing);
   - ThermalNoiseRemoval (VV), negative values clipped to 0. No
-    Border-Noise-Removal: not needed for products processed by ESA's IPF
-    since 2018, which already removes GRD border noise;
+    Border-Noise-Removal: ESA's IPF removes the GRD border noise itself
+    since version 2.90 (March 2018). **Open:** two v0.1 scenes are older
+    (ds_forest_4, 2017-12-20; ds_forest_10, 2017-08-04) and may still carry
+    it, unless ESA reprocessed them: check the IPF version in their
+    `manifest.safe`, and add Border-Noise-Removal for them if it is below
+    2.90;
   - Calibration: **Sigma0 VV, linear intensity** (not dB, not amplitude), so
     `input_scale = "linear"`, and the ENL of v0.2 is computed on intensity;
   - Terrain-Correction: Copernicus 30 m DEM, **bilinear image resampling**,
     10 m pixels, UTM zone of the scene, no radiometric terrain normalization
-    (slopes keep their natural brightness), sea set to no-data;
+    (slopes keep their natural brightness). "Mask out areas without
+    elevation" (`nodataValueAtSea`) is on: pixels where the DEM has no
+    value (open sea) become 0, so the patches that contain them are
+    rejected by the 5 % no-data rule. It does not skip flat terrain and
+    saves no meaningful computation; it only matters for the coastal
+    scenes (ds_forest_7, ds_forest_9);
   - Write: GeoTIFF. A full scene in float32 is ~2.3 GB, beyond what SNAP's
     own GeoTIFF reader can display (32-bit size overflow past ~2.1 GB, error
     `capacity < 0`); the file itself is valid. GeoTIFF-BigTIFF, or a subset
