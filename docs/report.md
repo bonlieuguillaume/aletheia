@@ -229,6 +229,14 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   first run, then one run with it, all else equal.
 - **Checkpoint selection on the validation loss** (threshold-free); early
   stopping after 8 epochs without improvement.
+  - *Val loss and val MCC can diverge (confidence).* BCE punishes an error
+    by its confidence: for a forged pixel, -log(p) is 0.92 at p = 0.4 but
+    9.2 at p = 0.0001, while the MCC counts both as one error. A model that
+    grows over-confident (right answers 0.9 -> 0.999, its few errors
+    0.4 -> 0.0001) sees its val loss rise with an unchanged MCC. Little
+    impact on the final scores (thresholds chosen on val), but the
+    probabilities stop meaning what they say, which matters for a map shown
+    to an analyst: **calibration** is a possible improvement (open question).
 - Output size: modern U-Nets pad their convolutions, so a 512x512 input
   gives a 512x512 map (input divisible by 2^depth).
 - **Borders:** near the patch edge the network lacks context and the padding
@@ -310,4 +318,5 @@ realistic prevalence (#36), telling the pasted region from its source (#38).
 ## 9. Open questions
 
 - Realistic metric targets, per difficulty level (#6-#8).
-- SNAP graph parameters, once the XMLs are delivered.
+- Calibration of the predicted probabilities (does 0.7 mean "70 % likely
+  forged"?), if the val loss rises while the val MCC holds (section 4).
