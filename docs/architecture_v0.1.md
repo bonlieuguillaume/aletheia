@@ -220,6 +220,42 @@ Step by step:
 5. **Breakdown.** The per-sample table is joined with the manifest, so the
    results can be sliced by level, paste size or scene.
 
+### Why the source pixels are ignored
+
+In a naive copy-move, the source region and the pasted region are identical
+pixel for pixel: from the image alone, nothing says which of the two twins is
+the original. So the source (`mask == 2`) is left out of both the **loss**
+and the **pixel metrics**, counted neither as a hit nor as a false alarm:
+
+- counting it as a **false alarm** would penalize every method that flags it,
+  although that is often unavoidable: duplicate-finding methods (block
+  correlation, the Vertical 52 keypoint matching) always flag both twins, and
+  the U-Net may learn the "duplicated texture" cue too;
+- counting it as a **hit** would reward flagging a region that is not forged.
+
+**The trade-off.** The model is free to light up the source, so in practice
+its map may show two regions, the copy and the original, the latter being a
+false positive on genuine pixels; the larger the paste, the larger that area.
+In exchange, the model does not have to decide which twin is the copy, so it
+can rely fully on the duplication cue to find the pasted region, and the
+methods are compared on equal terms. For an analyst, two twin regions lit up
+point straight at the duplication, which is how Vertical 52 shows its results.
+A model *can* in principle tell them apart (only the pasted region has
+artificial seams with its surroundings); measuring that later needs no new
+data, since the mask already separates `1` (pasted) from `2` (source).
+
+### What "without a 16-px border" measures (#32)
+
+Every pixel metric is computed twice: on the full 512x512 patch, and on the
+central 480x480 square only, ignoring a 16-px band along the four edges,
+where the network sees less context. Close values: borders are fine; a clearly
+better score without the band: predictions degrade near the borders. It is a
+measurement only, computed at no extra cost, the model is not changed. At
+level 1 pastes stay at least 32 px from the border, so the band never contains
+the pasted region: the gap then only reflects false alarms near the edges (a
+check that reflection padding, #31, does its job). From level 2 on, pastes may
+touch the border and the gap also shows whether they are missed there.
+
 Worked example, image level, 400 forged + 400 authentic test patches:
 
 | | flagged | not flagged |

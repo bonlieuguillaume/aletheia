@@ -206,8 +206,12 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - Pixel metrics are computed on forged patches only (pixel F1 is undefined
     without positives); false alarms on authentic patches are measured
     separately. **Source pixels (`2`) are ignored** (neither hit nor false
-    alarm), for every method: duplicate-finding methods cannot tell the
-    original from the copy.
+    alarm), in the loss and the metrics, for every method: duplicate-finding
+    methods cannot tell the original from the copy. Trade-off: the map may
+    also light up the source (a false positive on genuine pixels, larger for
+    larger pastes), in exchange for a simpler learning of the duplication cue
+    and a fair comparison between methods
+    ([architecture_v0.1.md](architecture_v0.1.md), section 5).
   - *Prevalence (later, #36):* our sets are 50 % forged, forgeries are rare
     in practice. The model's probabilities embed that 50 % prior, and a small
     false-positive rate turns into many false alarms at low prevalence; scores
