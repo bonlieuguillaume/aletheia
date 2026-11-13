@@ -78,6 +78,68 @@ flowchart TB
 - **Augmentation** (optional, compared in #37): the same east-west mirror,
   applied at random to half of the training patches.
 
+### Input of the network: dB conversion, then normalization
+
+The files stay in **linear** values on disk (recommended SNAP export:
+calibrated intensity, float32, linear). Every patch then goes through two
+steps, in memory, always in the same order, in training and in prediction
+(`unet.to_model_scale`, then the normalization in `SARPatchDataset.load` and
+`unet.predict_probabilities`). No raw pixel ever enters the network.
+
+```mermaid
+flowchart LR
+    RAW["patch on disk<br/>linear intensity"] --> DB["1. dB<br/>10 log10(max(x, 1e-6))"] --> STD["2. standardization<br/>(x_dB - mu) / sigma"] --> NET["U-Net"]
+```
+
+**1. Why dB.**
+
+- *Dynamic range.* In linear intensity one scene spans about 5 orders of
+  magnitude: calm water ~0.001 (-30 dB), forest ~0.1 (-10 dB), bright
+  reflectors (buildings, pylons) 10 to 100 (+10 to +20 dB). Most pixels are
+  squeezed near 0 and a few bright ones dominate (long-tailed distribution),
+  which makes learning unstable. The logarithm compresses the range into a
+  roughly bell-shaped distribution.
+- *Speckle becomes additive.* Speckle is multiplicative: the measured
+  intensity is the true reflectivity times a random factor, $I = R \cdot n$,
+  so bright pixels are much noisier in absolute terms than dark ones. The log
+  turns the product into a sum, $10 \log_{10} I = 10 \log_{10} R + 10 \log_{10} n$:
+  the noise has the same amplitude everywhere, which suits convolutions (the
+  same filter is applied over the whole image).
+- Zeros (no-data, very dark pixels) are clamped to $10^{-6}$ before the log,
+  so they give a finite value (-60 dB) instead of $-\infty$.
+
+**2. Why a global standardization.** $\tilde{x} = (x_{dB} - \mu) / \sigma$,
+with $\mu$ and $\sigma$ computed **once**, on authentic training patches only,
+and saved in the `config.json` of the run; the same values are applied to
+every patch of every split. The network then sees values centred on 0 with a
+standard deviation of 1, the scale the ImageNet-pretrained encoder was trained
+on.
+
+- *Global, not per patch:* a per-patch standardization would erase the
+  radiometric differences between regions, which splicing detection (v0.3)
+  relies on.
+- *It absorbs constant factors.* Intensity is the square of amplitude, so
+  giving amplitude instead of intensity halves every dB value
+  ($10 \log_{10} A = \tfrac{1}{2} \cdot 10 \log_{10} I$); but $\mu$ and $\sigma$
+  are halved too, and $(0.5 x - 0.5 \mu) / (0.5 \sigma) = (x - \mu) / \sigma$:
+  the network receives exactly the same values. Likewise, a calibration
+  constant (a factor in linear, an offset in dB) is removed by subtracting
+  $\mu$. Condition: **all scenes processed the same way** (all intensity or
+  all amplitude, same calibration); a global normalization absorbs a factor
+  common to the dataset, not a mixture.
+
+**If the scenes are exported in dB anyway**, the conversion must be the very
+last step of the SNAP graph, after terrain correction (which interpolates
+between pixels, and an average taken in dB is wrong), and the U-Net notebook
+must be set to `"input_scale": "db"` so the code skips step 1. Linear export is
+preferred: the speckle statistics of v0.2 (coefficient of variation, ENL,
+Gamma fit) are defined on linear intensity.
+
+**Not to be confused with batch normalization**, the layers *inside* the
+network that re-normalize the activations between layers: they are part of
+the architecture and are learned with it, whereas this standardization is a
+fixed preprocessing of the input data.
+
 ## 3. Model
 
 ```mermaid
