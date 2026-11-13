@@ -11,6 +11,10 @@
     product it was opened on (25514 x 14425 here): remove it or update it for
     another product.
 
+  nodataValueAtSea ("Mask out areas without elevation" in Terrain-Correction)
+  sets pixels without DEM value, i.e. the open sea, to 0 = no-data: fine for
+  land scenes, but switch it off to reuse this graph on maritime scenes.
+
   Command line: gpt GRD_pre_process.xml -Pinput=<product> -Poutput=<file.tif>
 -->
 <graph id="Graph">

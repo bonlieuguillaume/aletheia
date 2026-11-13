@@ -21,7 +21,10 @@ geometry of the patch, the opposite one when `mirrored`).
 Rules:
 - crop, never resize; non-overlapping grid of windows;
 - a window is rejected if more than 5 % of its pixels are no-data (0 or NaN):
-  the empty borders of terrain correction are rejected, isolated zeros kept;
+  the empty borders of terrain correction are rejected, isolated zeros kept.
+  The SNAP graph also sets the open sea to 0 ("Mask out areas without
+  elevation"), so sea patches are rejected too: switch that option off
+  before tiling maritime scenes;
 - 200 patches drawn at random per scene (seeded by `(seed, scene index)`);
 - orbits balanced: if the scenes are not 50/50 ascending / descending, scenes
   of the majority orbit are mirrored east-west (`mirror_east_west`: on a

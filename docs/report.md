@@ -80,7 +80,9 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     value (open sea) become 0, so the patches that contain them are
     rejected by the 5 % no-data rule. It does not skip flat terrain and
     saves no meaningful computation; it only matters for the coastal
-    scenes (ds_forest_7, ds_forest_9);
+    scenes (ds_forest_7, ds_forest_9). **To reuse the chain on maritime
+    scenes (ships, oil slicks, coasts), switch it off**, or the sea is
+    blanked out and tiling rejects every sea patch;
   - Write: GeoTIFF. A full scene in float32 is ~2.3 GB, beyond what SNAP's
     own GeoTIFF reader can display (32-bit size overflow past ~2.1 GB, error
     `capacity < 0`); the file itself is valid. GeoTIFF-BigTIFF, or a subset
