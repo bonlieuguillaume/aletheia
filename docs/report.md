@@ -227,6 +227,24 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   Sentinel-1 never has), 180 deg rotation (~24 deg off the descending look
   direction, because of the ~12 deg inclination of the track). Off for the
   first run, then one run with it, all else equal.
+- **Optimization: AdamW, learning rate 3e-4 with a cosine decay, batches
+  of 8 patches, mixed precision.**
+  - *Learning rate* = size of the step the optimizer takes on the weights
+    after each batch: too large, the loss oscillates or explodes; too small,
+    learning crawls. 3e-4 is a safe default for AdamW on a pretrained
+    encoder. The **cosine schedule** lowers it smoothly from 3e-4 (epoch 1)
+    to ~1.5e-4 (epoch 20) to ~0 (epoch 40): large steps while far from a
+    good solution, finer and finer ones to settle in it. This is also why
+    the val loss can still improve late, and why a patience of 8 epochs is
+    not too short.
+  - *Weight decay 1e-4* (the "W" of AdamW): pulls the weights towards 0,
+    a mild protection against over-fitting.
+  - *Batch of 8* = patches processed together before one weight update
+    (300 updates per epoch for 2400 training patches). Larger batches give a
+    steadier update direction but need more GPU memory; 8 fits a T4 (16 GB)
+    with 512x512 patches. The batch Dice is computed over these 8 patches.
+    Not to be confused with the patience, which is also 8 by coincidence.
+  - *Mixed precision*: float16 on the GPU, about 2x faster on a T4.
 - **Checkpoint selection on the validation loss** (threshold-free); early
   stopping after 8 epochs without improvement.
   - *Val loss and val MCC can diverge (confidence).* BCE punishes an error

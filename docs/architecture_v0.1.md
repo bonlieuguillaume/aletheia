@@ -208,6 +208,9 @@ networks train.
   zeros at the patch border.
 - **Loss**: BCE + Dice computed over the batch, on `mask == 1`, source pixels
   ignored.
+- **Optimization**: AdamW, learning rate 3e-4 decayed along a cosine over the
+  planned epochs, weight decay 1e-4, batches of 8, mixed precision (why:
+  [report.md](report.md), section 4).
 
 ## 4. Training, validation, test
 
