@@ -6,7 +6,7 @@ lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects
 
 Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation);
 scenes preprocessed, tiling (2000 patches), copy-move and a first training
-run done (section 5.1); evaluation not yet run. Last update: 2026-11-13.
+run and its evaluation done (section 5.1). Last update: 2026-11-13.
 Architecture and metric procedure of v0.1: [architecture_v0.1.md](architecture_v0.1.md).
 
 ## 1. Goal and scope
@@ -322,11 +322,31 @@ image MCC 0.944, mean pixel MCC 0.979 at epoch 15.
   validate the pipeline, not the difficulty of the problem (levels 2-4,
   #25-#27).
 
-**Settings chosen on val** (`eval/settings.json`): score `top0.5%`, image
-threshold 0.997, pixel threshold 0.30 (val image MCC 0.993, val mean pixel
-MCC 0.979).
+**Settings chosen on val** (`eval/settings.json`, rule of
+[architecture_v0.1.md](architecture_v0.1.md), section 5, step 3):
 
-**Test results (official v0.1, level 1)** (`eval/summary_test.json`):
+| Score method | Val image MCC | Threshold (middle) | Margin |
+|---|---|---|---|
+| max | 0.988 | 1.000 | 0.000 |
+| top0.5% | 0.993 | 0.539 | 0.916 |
+| top1% | 0.993 | 0.476 | 0.871 |
+| top2% | 0.993 | 0.240 | 0.440 |
+| **p99.5** | **0.993** | **0.497** | **0.992** |
+
+Kept: **p99.5, image threshold 0.497**; pixel threshold **0.30** (val mean
+pixel MCC 0.979).
+
+- **Why the margin rule.** With `max`, even authentic patches hold a pixel at
+  ~1 (the over-confidence of section 4): no room at all between the classes
+  (margin 0). With the other methods it is the opposite: the classes are
+  far apart, e.g. with top0.5% no val patch scores between 0.081 and 0.997.
+  A threshold taken at the edge of that gap (0.997) would touch the least
+  clear forged patch, and a slightly weaker forgery on new images would be
+  missed; the middle (0.539) keeps 0.46 on each side. Four methods tie at
+  the best MCC (0.993, ~3 val errors out of 800, on the wrong side whatever
+  the threshold): the widest margin decides, not the order of the list.
+
+**Test results (v0.1, level 1)** (`eval/summary_test.json`):
 
 | Metric | Test |
 |---|---|
@@ -336,19 +356,9 @@ MCC 0.979).
 | Pixel MCC / F1, global | 0.993 / 0.993 |
 | False alarms on authentic patches (fraction of pixels) | 3.5e-7, i.e. ~0.09 pixel per patch |
 
-- **Saturated probabilities.** The image thresholds chosen on val sat at
-  the top of the scale (max: 1.000, top0.5%: 0.997, p99.5: 0.993): even
-  authentic patches hold a few pixels at ~1, the over-confidence of
-  section 4. Four methods tied at the same val MCC (0.993, ~3 errors out of
-  800) and the first of the list won, although `top2%` reached it with a
-  threshold of 0.46, far from saturation, hence far more robust.
-- **Rule changed after this run, on val evidence only:** the image
-  threshold is now the middle of the interval of equally good thresholds
-  (not its lower edge), and ties between score methods go to the widest
-  interval (`best_image_threshold`, `choose_thresholds`). The test results
-  above were obtained with the former rule and stay the official v0.1
-  figures; the new rule applies from the next run. Re-evaluating this run
-  with it would mean using the test set twice.
+Per test scene: ds_forest_1 pixel MCC 0.992, ds_forest_9 (mirrored) 0.994,
+every forged patch detected in both. Mean and global pixel MCC are nearly
+equal: the localization does not depend on the paste size.
 
 ## 6. Presentation example
 
