@@ -4,8 +4,9 @@ Living document: every design choice of the project, **why** it was made, and
 what remains open. It is updated as the work progresses; the task list itself
 lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects/5).
 
-Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation),
-not yet run on real data; scenes being prepared. Last update: 2026-11-12.
+Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation);
+the 10 scenes are preprocessed and on Drive, tiling has run (2000 patches);
+copy-move, training and evaluation not yet run. Last update: 2026-11-13.
 Architecture and metric procedure of v0.1: [architecture_v0.1.md](architecture_v0.1.md).
 
 ## 1. Goal and scope
@@ -80,7 +81,8 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     value (open sea) become 0, so the patches that contain them are
     rejected by the 5 % no-data rule. It does not skip flat terrain and
     saves no meaningful computation; it only matters for the coastal
-    scenes (ds_forest_7, ds_forest_9). **To reuse the chain on maritime
+    scenes (ds_forest_7: 568 valid windows, ds_forest_10: 735, against
+    ~1250-1750 for the inland scenes). **To reuse the chain on maritime
     scenes (ships, oil slicks, coasts), switch it off**, or the sea is
     blanked out and tiling rejects every sea patch;
   - Write: BEAM-DIMAP (the graph did not run with GeoTIFF-BigTIFF as
@@ -133,6 +135,14 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - *Why:* a network with millions of parameters can memorize thousands of
     images (Zhang et al., 2017, fit random labels on CIFAR-10); with
     patch-level splits, it would recognize scenes instead of forgeries.
+  - *Draw of v0.1 (seed 0):* train = ds_forest_2, 3, 4, 5 (mirrored), 8,
+    10; val = ds_forest_6 (mirrored), 7; test = ds_forest_1, 9 (mirrored).
+    *Known limit:* the only two truly ascending scenes (4, 8) and the three
+    Gran Chaco dry-forest scenes (4, 5, 8) all fell in train, so the
+    ascending-like scenes of val and test are mirrored descending ones, and
+    val and test are Amazon rain forest only. Accepted for v0.1, which
+    measures copy-move detection, not transfer to another forest type;
+    `FORCED_SPLITS` can put a real ascending Chaco scene in test.
 - An authentic patch and its forged version form a **pair** and always land
   on the same side of the split (guaranteed by the split by scene). Pairs
   force the model to learn the forgery, the only difference between the two.
