@@ -381,8 +381,9 @@ def train(dataset_dir, run_dir, config=None):
             "epoch": epoch + 1,
             "train_loss": round(train_result["loss"], 5),
             "val_loss": round(val_result["loss"], 5),
-            "val_image_mcc_at_0.5": round(val_result["image_mcc_at_0.5"], 4),
-            "val_pixel_mcc_at_0.5": round(val_result["pixel_mcc_at_0.5"], 4),
+            # float(): a numpy float would print as "np.float64(...)".
+            "val_image_mcc_at_0.5": round(float(val_result["image_mcc_at_0.5"]), 4),
+            "val_pixel_mcc_at_0.5": round(float(val_result["pixel_mcc_at_0.5"]), 4),
             "seconds": round(time.time() - start),
         }
         print(log_row)
