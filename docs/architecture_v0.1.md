@@ -275,6 +275,18 @@ Step by step:
      margin (the most robust), not the first of the list;
    - pixel level: the threshold giving the best **mean per-patch pixel MCC**
      over the forged patches is kept;
+   - *Why the scores themselves rather than a grid, for the image threshold:*
+     decisions only change when the threshold crosses the score of a patch;
+     between two neighbouring scores every threshold gives exactly the same
+     decisions. Trying each score therefore tries every possible set of
+     decisions (at most ~800 cheap tries) and cannot miss the best one. A
+     grid can: with saturated scores (authentic up to 0.9968, forged from
+     0.9978), a 0.01 step only tries 0.99 (one false alarm) and 1.00 (one
+     miss), and no step is fine enough for sure. The rounder threshold a grid
+     would give is recovered by taking the middle of the optimal interval.
+   - *Why a grid for the pixel threshold:* the candidates would be every
+     pixel value, 400 patches x 262,144 pixels, and the mean per-patch pixel
+     MCC changes slowly with the threshold: a 0.05 step is close enough.
    - the three settings are written to `eval/settings.json` and frozen.
 4. **Final metrics, on the test set** (`compute_metrics`), with the frozen
    settings:
