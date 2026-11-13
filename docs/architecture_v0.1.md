@@ -86,7 +86,7 @@ flowchart LR
 
     subgraph ENC["Encoder: ResNet-34 pretrained on ImageNet"]
         direction TB
-        E1["256 x 256"] --> E2["128 x 128"] --> E3["64 x 64"] --> E4["32 x 32"] --> E5["16 x 16"]
+        E1["256 x 256, 64 ch<br/>conv 7x7"] --> E2["128 x 128, 64 ch<br/>3 residual blocks"] --> E3["64 x 64, 128 ch<br/>4 residual blocks"] --> E4["32 x 32, 256 ch<br/>6 residual blocks"] --> E5["16 x 16, 512 ch<br/>3 residual blocks"]
     end
 
     subgraph DEC["Decoder: U-Net, trained from scratch"]
@@ -102,6 +102,24 @@ flowchart LR
     D1 --> OUT["Probability map<br/>1 x 512 x 512<br/>P(pixel pasted)"]
     OUT --> SCORE["Image score<br/>max / top-k % / percentile<br/>(chosen on val)"]
 ```
+
+The dashed arrows are the **U-Net skip connections** (long, encoder to
+decoder, concatenation). The **ResNet residual shortcuts** are inside each
+encoder box: every box is a stage of 3 to 6 residual blocks, each with its own
+shortcut (16 blocks in all; 16 x 2 convolutions + the first convolution + the
+classification layer removed by the U-Net = the 34 layers of ResNet-34).
+One residual block:
+
+```mermaid
+flowchart LR
+    X["input x"] --> C1["conv 3x3<br/>+ batch norm + ReLU"] --> C2["conv 3x3<br/>+ batch norm"] --> ADD(("+"))
+    X -- "shortcut: x copied as is" --> ADD
+    ADD --> R["ReLU"] --> Y["output = F(x) + x"]
+```
+
+If a block has nothing useful to add, it only has to learn F(x) = 0 and the
+signal goes through the shortcut unchanged: this is what lets very deep
+networks train.
 
 - **Encoder**: a ResNet-34 (residual blocks, short additive shortcuts) whose
   ImageNet weights give it ready-made edge and texture filters; its first
