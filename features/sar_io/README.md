@@ -6,6 +6,8 @@ features, so that every file format is defined in one place.
 | Function | File |
 |---|---|
 | `read_tif` | any single-band `.tif`: scene GeoTIFF, patch, mask |
+| `read_scene` | a preprocessed scene: GeoTIFF, or one BEAM-DIMAP band (`.hdr` given, `read_envi`) |
+| `read_envi` | one band of a SNAP BEAM-DIMAP product: ENVI `.hdr` (size, type, byte order) + raw `.img`, read with numpy, no conversion |
 | `write_patch` | SAR patch: float32, one band, no georeferencing, uncompressed |
 | `write_mask` | mask: uint8, one band, zlib (lossless) |
 | `write_probability_map` / `read_probability_map` | predicted anomaly map: probabilities quantized to uint8 (0-255) |

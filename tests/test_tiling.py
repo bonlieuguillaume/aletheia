@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from features.sar_io.sar_io import read_manifest, read_tif
+from features.sar_io.sar_io import read_manifest, read_scene, read_tif
 from features.tiling.tiling import (
     assign_splits,
     choose_mirrored_scenes,
@@ -93,7 +93,7 @@ def test_tiling_output(dataset_dir, scenes_dir):
         assert (patch == 0).mean() <= 0.05
 
         # row / col point to the patch in the ORIGINAL scene, mirrored or not.
-        scene = read_tif(scenes[row["scene"]])
+        scene = read_scene(scenes[row["scene"]])
         original = scene[row["row"]:row["row"] + 256, row["col"]:row["col"] + 256]
         if row["mirrored"]:
             original = mirror_east_west(original)

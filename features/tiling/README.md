@@ -10,7 +10,7 @@ patches and assigns every scene to train / val / test.
 
 | | Where | Content |
 |---|---|---|
-| Reads | `MyDrive/aletheia/data/scenes/<scene>/` | one VV GeoTIFF (+ its SNAP graph XML, not read); `asc` or `desc` in the folder name |
+| Reads | `MyDrive/aletheia/data/scenes/<scene>/` | one VV image, at any depth: a GeoTIFF, or a BEAM-DIMAP band (`Sigma0_VV.hdr` + `.img`, e.g. the `.data/` folder of SNAP copied as is; the `.dim` is not needed). Not both: a folder with two images is refused. Its SNAP graph XML is not read. `asc` or `desc` in the folder name |
 | Writes | VM `/content/patches/`, then `MyDrive/aletheia/data/patches_v0.1.zip` | `real/<patch_id>.tif`, `patches.csv` |
 
 `patches.csv`: `patch_id, scene, row, col, orbit, mirrored, geometry, split`

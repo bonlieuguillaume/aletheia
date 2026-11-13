@@ -59,7 +59,7 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   all scenes** ([snap/GRD_pre_process.xml](snap/GRD_pre_process.xml), local
   paths replaced by `${input}` / `${output}`; only the input product and the
   UTM zone change). The code reads none of it: from each scene it only uses the
-  pixel values of the GeoTIFF and the orbit written in the folder name. The
+  pixel values of the image and the orbit written in the folder name. The
   graph:
   - Read: whole product, no subset;
   - Apply-Orbit-File: precise orbits (`continueOnFail`: falls back silently
@@ -83,13 +83,17 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     scenes (ds_forest_7, ds_forest_9). **To reuse the chain on maritime
     scenes (ships, oil slicks, coasts), switch it off**, or the sea is
     blanked out and tiling rejects every sea patch;
-  - Write: classic GeoTIFF (~2.3 GB per scene in float32, under the 4 GB
-    limit of the format). In practice the graph writes BEAM-DIMAP, then the
-    user exports it to GeoTIFF by hand in SNAP (File > Export): the graph
-    did not run with GeoTIFF-BigTIFF as output. SNAP's own GeoTIFF reader
-    fails to display a file past ~2.1 GB (32-bit size overflow, error
-    `capacity < 0`) but the file is valid, and a different reader opens it.
-    The code reads it with tifffile, which has no such limit.
+  - Write: BEAM-DIMAP (the graph did not run with GeoTIFF-BigTIFF as
+    output). **The code reads both formats**: a GeoTIFF, or the Sigma0_VV
+    band of a BEAM-DIMAP product, read directly from its ENVI `.hdr` +
+    `.img` with numpy (raw big-endian float32, ~2.3 GB per scene), with no
+    conversion and no new dependency. A GeoTIFF export (File > Export in
+    SNAP, classic GeoTIFF, under the 4 GB limit of the format) stays useful
+    to look at the scenes in other software; converting in the code would
+    only add a 2.3 GB write per scene and, for a georeferenced file, a GDAL
+    dependency. SNAP's own GeoTIFF reader fails to display a file past
+    ~2.1 GB (32-bit size overflow, error `capacity < 0`) but the file is
+    valid, and a different reader opens it; tifffile has no such limit.
 - Terrain correction **resamples** the image: neighbouring speckle values
   become slightly correlated, which changes local statistics (relevant for
   v0.2 physical cues).

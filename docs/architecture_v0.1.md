@@ -19,7 +19,7 @@ flowchart LR
     end
 
     subgraph DRIVE["Google Drive"]
-        SCENES[("data/scenes/<br/>GeoTIFF + SNAP XML")]
+        SCENES[("data/scenes/<br/>GeoTIFF or BEAM-DIMAP + SNAP XML")]
         PZIP[("patches_v0.1.zip")]
         DZIP[("dataset_v0.1_level1.zip")]
         RUN[("runs/RUN_NAME/<br/>checkpoints, logs")]

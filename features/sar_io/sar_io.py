@@ -3,7 +3,8 @@
 Everything that touches the disk goes through this module, so that the file
 formats are defined in one place:
 
-- scene GeoTIFFs produced by the user's preprocessing (rosarium / SNAP);
+- scenes produced by the user's preprocessing (rosarium / SNAP), either a
+  GeoTIFF or one band of a BEAM-DIMAP product (ENVI `.hdr` + `.img`);
 - patch `.tif` files (float32, one band, no georeferencing);
 - mask `.tif` files (uint8, one band, values 0 / 1 / 2, lossless);
 - the manifest CSV, the single index of the dataset.
@@ -46,6 +47,130 @@ def read_tif(path):
     if image.ndim != 2:
         raise ValueError(f"{path}: expected a single-band image, got shape {image.shape}")
     return image
+
+
+# ENVI "data type" codes -> numpy types. Only the types SNAP writes for a
+# single-band SAR product are listed; any other code is refused.
+ENVI_DATA_TYPES = {
+    1: "u1",   # uint8
+    2: "i2",   # int16
+    3: "i4",   # int32
+    4: "f4",   # float32 (Sigma0 written by SNAP)
+    5: "f8",   # float64
+    12: "u2",  # uint16
+}
+
+# Extensions of the scene files the tiling accepts.
+SCENE_EXTENSIONS = (".tif", ".tiff", ".hdr")
+
+
+def envi_header_value(header_text, key, default=None):
+    """Return the value of `key = value` in an ENVI header, as a string.
+
+    Parameters
+    ----------
+    header_text : str
+        Whole content of the `.hdr` file.
+    key : str
+        Field name, e.g. "samples" or "byte order".
+    default : str, optional
+        Returned when the field is absent; if None, a missing field is an error.
+
+    Returns
+    -------
+    str
+        The value, stripped.
+    """
+    for line in header_text.splitlines():
+        if "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        if name.strip().lower() == key:
+            return value.strip()
+    if default is None:
+        raise ValueError(f"ENVI header: field '{key}' not found")
+    return default
+
+
+def read_envi(hdr_path):
+    """Read a single-band ENVI image, i.e. one band of a SNAP BEAM-DIMAP product.
+
+    A BEAM-DIMAP product is a `.dim` file (XML metadata, not needed here) plus
+    a `.data/` folder holding, for each band, a raw binary `.img` file and a
+    small text `.hdr` file that says how to read it (size, data type, byte
+    order). SNAP writes the pixels big-endian, while the CPUs of Colab and of
+    a PC are little-endian, so the bytes are swapped after reading.
+
+    Parameters
+    ----------
+    hdr_path : str or Path
+        Path of the `.hdr` file; the `.img` file next to it holds the pixels.
+
+    Returns
+    -------
+    numpy.ndarray
+        2-D array (lines, samples), in the native byte order.
+    """
+    hdr_path = Path(hdr_path)
+    img_path = hdr_path.with_suffix(".img")
+    header_text = hdr_path.read_text(encoding="utf-8", errors="replace")
+
+    samples = int(envi_header_value(header_text, "samples"))  # image width
+    lines = int(envi_header_value(header_text, "lines"))      # image height
+    bands = int(envi_header_value(header_text, "bands", "1"))
+    data_type = int(envi_header_value(header_text, "data type"))
+    byte_order = int(envi_header_value(header_text, "byte order", "0"))  # 1 = big-endian
+    header_offset = int(envi_header_value(header_text, "header offset", "0"))
+
+    if bands != 1:
+        raise ValueError(f"{hdr_path}: expected a single-band image, got {bands} bands")
+    if data_type not in ENVI_DATA_TYPES:
+        raise ValueError(f"{hdr_path}: unsupported ENVI data type {data_type}")
+
+    # Data type as stored in the file, with its byte order.
+    if byte_order == 1:
+        stored_dtype = np.dtype(">" + ENVI_DATA_TYPES[data_type])
+    else:
+        stored_dtype = np.dtype("<" + ENVI_DATA_TYPES[data_type])
+
+    # A truncated upload would otherwise silently give a shorter image.
+    expected_size = header_offset + lines * samples * stored_dtype.itemsize
+    actual_size = img_path.stat().st_size
+    if actual_size != expected_size:
+        raise ValueError(f"{img_path}: {actual_size} bytes, expected {expected_size} "
+                         f"({lines} x {samples} pixels of {stored_dtype.itemsize} bytes)")
+
+    image = np.fromfile(img_path, dtype=stored_dtype, count=lines * samples,
+                        offset=header_offset)
+
+    # Swap the bytes in place (no second copy of a ~2 GB scene), then look at
+    # the same memory with the native byte order.
+    if not stored_dtype.isnative:
+        image.byteswap(inplace=True)
+        image = image.view(stored_dtype.newbyteorder("="))
+
+    return image.reshape(lines, samples)
+
+
+def read_scene(path):
+    """Read a preprocessed scene: a GeoTIFF, or the `.hdr` of a BEAM-DIMAP band.
+
+    Parameters
+    ----------
+    path : str or Path
+        `.tif` / `.tiff` file, or `.hdr` file (with its `.img` next to it).
+
+    Returns
+    -------
+    numpy.ndarray
+        2-D array, with the dtype stored in the file.
+    """
+    suffix = Path(path).suffix.lower()
+    if suffix == ".hdr":
+        return read_envi(path)
+    if suffix in (".tif", ".tiff"):
+        return read_tif(path)
+    raise ValueError(f"{path}: unknown scene format (expected one of {SCENE_EXTENSIONS})")
 
 
 def write_patch(path, patch):

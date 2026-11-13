@@ -1,10 +1,13 @@
 """Tile the preprocessed Sentinel-1 scenes into 512x512 patches (issue #28).
 
-Input: one folder per scene, each holding one VV GeoTIFF (and the XML of the
-SNAP graph that produced it), as put on Google Drive by the user:
+Input: one folder per scene, each holding one VV image (and the XML of the
+SNAP graph that produced it), as put on Google Drive by the user. The image
+is either a GeoTIFF or one band of a SNAP BEAM-DIMAP product (its `.hdr` +
+`.img`, read directly, no conversion), at any depth in the folder:
 
     scenes_dir/
         <scene_name>/<anything>.tif
+        or <scene_name>/[<anything>.data/]Sigma0_VV.hdr + Sigma0_VV.img
         <scene_name>/<anything>.xml      (not read here, kept with the data)
 
 The orbit of each scene (ascending / descending) is read from its folder name
@@ -45,7 +48,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from features.sar_io.sar_io import read_tif, write_manifest, write_patch  # noqa: E402
+from features.sar_io.sar_io import SCENE_EXTENSIONS, read_scene, write_manifest, write_patch  # noqa: E402
 
 # Default parameters (the notebook passes its own values).
 PATCH_SIZE = 512
@@ -62,7 +65,11 @@ ORBITS = ["asc", "desc"]
 # ---------------------------------------------------------------------------
 
 def find_scenes(scenes_dir):
-    """List the scenes: one sub-folder per scene, holding one `.tif`.
+    """List the scenes: one sub-folder per scene, holding one image.
+
+    The image is a GeoTIFF (`.tif` / `.tiff`) or the `.hdr` of a BEAM-DIMAP
+    band (the `.img` next to it holds the pixels). It is searched at any
+    depth, so the `.data/` folder written by SNAP can be copied as it is.
 
     Parameters
     ----------
@@ -72,7 +79,7 @@ def find_scenes(scenes_dir):
     Returns
     -------
     dict
-        Scene name (the sub-folder name) -> path of its `.tif` file,
+        Scene name (the sub-folder name) -> path of its image file,
         sorted by scene name so that the order never depends on the disk.
     """
     scenes = {}
@@ -80,14 +87,22 @@ def find_scenes(scenes_dir):
         if not scene_dir.is_dir():
             continue
 
-        tif_files = sorted(scene_dir.glob("*.tif")) + sorted(scene_dir.glob("*.tiff"))
-        if len(tif_files) == 0:
-            print(f"Skipping {scene_dir.name}: no .tif file")
-            continue
-        if len(tif_files) > 1:
-            raise ValueError(f"{scene_dir}: expected one .tif file, found {len(tif_files)}")
+        image_files = []
+        for path in sorted(scene_dir.rglob("*")):
+            if path.is_file() and path.suffix.lower() in SCENE_EXTENSIONS:
+                image_files.append(path)
 
-        scenes[scene_dir.name] = tif_files[0]
+        if len(image_files) == 0:
+            print(f"Skipping {scene_dir.name}: no .tif or .hdr file")
+            continue
+        if len(image_files) > 1:
+            # E.g. a GeoTIFF and its BEAM-DIMAP both uploaded: which one to
+            # use is the user's choice, not a guess.
+            names = [str(path.relative_to(scene_dir)) for path in image_files]
+            raise ValueError(f"{scene_dir}: expected one image, found {len(image_files)}: "
+                             f"{names}. Keep only one.")
+
+        scenes[scene_dir.name] = image_files[0]
     return scenes
 
 
@@ -331,11 +346,11 @@ def tile_scenes(scenes_dir, out_dir, patch_size=PATCH_SIZE, patches_per_scene=PA
 
     rows = []
     patch_counter = 0
-    for scene_index, (scene_name, tif_path) in enumerate(sorted(scenes.items())):
-        print(f"Reading {tif_path.name} ...")
+    for scene_index, (scene_name, image_path) in enumerate(sorted(scenes.items())):
+        print(f"Reading {scene_name}/{image_path.name} ...")
         # copy=False: no second copy if the file is already float32 (a full
         # scene is ~2 GB, the Colab VM has ~12 GB of RAM).
-        image = read_tif(tif_path).astype(np.float32, copy=False)
+        image = read_scene(image_path).astype(np.float32, copy=False)
         scene_width = image.shape[1]
         if scene_name in mirrored:
             image = mirror_east_west(image)

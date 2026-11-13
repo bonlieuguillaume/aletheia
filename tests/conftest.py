@@ -24,6 +24,36 @@ from features.tiling.tiling import tile_scenes  # noqa: E402
 TEST_PATCH_SIZE = 256
 
 
+def write_envi(hdr_path, image, big_endian=True):
+    """Write a single-band image like one band of a SNAP BEAM-DIMAP product.
+
+    `.img` = raw pixels (big-endian by default, as SNAP writes them),
+    `.hdr` = ENVI text header. Only the fields read by `read_envi` matter;
+    the others mimic a real SNAP header.
+    """
+    hdr_path = Path(hdr_path)
+    hdr_path.parent.mkdir(parents=True, exist_ok=True)
+    byte_order = 1 if big_endian else 0
+    stored = image.astype(">f4" if big_endian else "<f4")
+    stored.tofile(hdr_path.with_suffix(".img"))
+    header_lines = [
+        "ENVI",
+        "description = {Sentinel-1 IW Level-1 GRD Product - Unit: intensity}",
+        f"samples = {image.shape[1]}",
+        f"lines = {image.shape[0]}",
+        "bands = 1",
+        "header offset = 0",
+        "file type = ENVI Standard",
+        "data type = 4",
+        "interleave = bsq",
+        f"byte order = {byte_order}",
+        "band names = { Sigma0_VV }",
+        "map info = {UTM,1.0,1.0,264556.0,8920425.0,10.0,10.0,20,South,units=Meters}",
+    ]
+    header = "\n".join(header_lines) + "\n"
+    hdr_path.write_text(header, encoding="utf-8")
+
+
 def make_synthetic_scene(rng, height, width, empty_columns):
     """Gamma speckle (ENL 4.4) with an empty band and 1 % sparse zeros."""
     scene = rng.gamma(shape=4.4, scale=0.05 / 4.4, size=(height, width)).astype(np.float32)
@@ -37,7 +67,8 @@ def scenes_dir(tmp_path_factory):
     """Five synthetic scenes, one folder each, like on Google Drive.
 
     4 ascending + 1 descending: tiling mirrors one ascending scene to reach
-    3 ascending-like + 2 descending-like.
+    3 ascending-like + 2 descending-like. The descending scene is written as
+    a BEAM-DIMAP band (`.data/Sigma0_VV.hdr` + `.img`), the others as GeoTIFF.
     """
     root = tmp_path_factory.mktemp("scenes")
     rng = np.random.default_rng(0)
@@ -46,7 +77,11 @@ def scenes_dir(tmp_path_factory):
         # 3 x 4 windows of 256; the empty band removes the first column
         # (the last one once mirrored).
         scene = make_synthetic_scene(rng, height=800, width=1100, empty_columns=80)
-        write_patch(root / f"scene_{k}_{orbit}" / f"scene_{k}.tif", scene)
+        scene_dir = root / f"scene_{k}_{orbit}"
+        if orbit == "desc":
+            write_envi(scene_dir / f"scene_{k}.data" / "Sigma0_VV.hdr", scene)
+        else:
+            write_patch(scene_dir / f"scene_{k}.tif", scene)
     return root
 
 

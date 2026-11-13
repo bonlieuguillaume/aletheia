@@ -82,7 +82,8 @@ Code is organised as one feature per folder of `features/` (module + notebook
 ## Data
 
 - Input: Sentinel-1 IW GRD amplitude, **VV only**, forest scenes for now,
-  one GeoTIFF per scene plus the XML of its SNAP graph, produced by the
+  one image per scene (GeoTIFF, or a BEAM-DIMAP band read directly as ENVI
+  `.hdr` + `.img`) plus the XML of its SNAP graph, produced by the
   user's own preprocessing (rosarium / SNAP) and put on Drive. No speckle
   filter and no extra multilook, but IW GRD is already multilooked by ESA
   (about 5x1, ENL ~4.4): keep it in mind for any speckle statistic.
