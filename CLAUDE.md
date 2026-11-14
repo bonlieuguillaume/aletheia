@@ -160,5 +160,8 @@ run folder, so the steps chain through Drive, not through a shared session.
   `runs/<run>/eval_level<D>_trained<T>/settings.json` (run trained on level
   T, evaluated on level D); the run's own level is read back by
   `unet.load_model`. On another level, the own settings stay frozen.
+- `features/external_image/` - #11: one-cell notebook, any PNG / JPG ->
+  pseudo-SAR (mean / std of training, in dB), 512 windows overlapping by
+  half (max per pixel), frozen settings. Out-of-domain illustration only.
 - `tests/` - pytest on synthetic data (256x256 patches), run by
   `.github/workflows/tests.yml`.
