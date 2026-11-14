@@ -548,3 +548,11 @@ realistic prevalence (#36), telling the pasted region from its source (#38).
 - Realistic metric targets, per difficulty level (#6-#8).
 - Calibration of the predicted probabilities (does 0.7 mean "70 % likely
   forged"?), if the val loss rises while the val MCC holds (section 4).
+- **Image threshold rule less tied to the extreme val patches** (seen with
+  the level-2 model, section 5.2: one hard val patch set the threshold).
+  Candidates: the middle of the two class centroids (uses every patch, but
+  with saturated scores it falls near 0.5 whatever the data, and it gives
+  up the hard forgeries on purpose); the same on logit-transformed scores
+  (log(s / (1 - s)), which spreads the saturated ends); a threshold averaged
+  over bootstrap resamples of val. To be compared on new data (level 4,
+  other forgeries), not on the current test sets, whose results are known.
