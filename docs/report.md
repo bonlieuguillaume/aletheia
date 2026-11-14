@@ -169,6 +169,10 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - Level 2 (#25): rectangle, ellipse or slightly irregular polygon, drawn
     with equal odds; the shape itself (not its box) covers 2-5 % of the
     patch; only the pixels inside the shape are copied.
+  - Level 3 (#26): 2 to 4 pastes per patch, each as at level 2, none
+    overlapping another paste nor any source (4-20 % of the patch in all).
+    One manifest row per sample is kept: the per-paste details go into a
+    JSON column (`pastes`).
   - Every level is built from the **same authentic patches and split**, so
     a model can be scored on every level, and the scores compared.
 - **Plan across levels (decided 2026-11-14).** Level 1 is saturated (test

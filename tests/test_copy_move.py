@@ -1,4 +1,6 @@
-"""Tests of features/copy_move (issues #5, #24, #25)."""
+"""Tests of features/copy_move (issues #5, #24-#26)."""
+
+import json
 
 import numpy as np
 
@@ -8,6 +10,7 @@ from features.copy_move.copy_move import (
     build_dataset,
     copy_move_level1,
     copy_move_level2,
+    copy_move_level3,
     ellipse_mask,
     polygon_mask,
 )
@@ -106,3 +109,48 @@ def test_level2_dataset(scenes_dir, tmp_path):
     assert "shape" in manifest.columns and "touches_border" in manifest.columns
     reread = read_manifest(tmp_path / "manifest.csv")
     assert str(reread["touches_border"].dtype) == "Int64"
+
+
+# ---------------------------------------------------------------------------
+# Level 3 (#26): several pastes per patch
+# ---------------------------------------------------------------------------
+
+def test_level3_several_exact_pastes_without_overlap():
+    patch = np.random.default_rng(0).gamma(4.4, 1.0, size=(512, 512)).astype(np.float32)
+    n_seen = set()
+    for k in range(40):
+        forged, mask, params = copy_move_level3(patch, np.random.default_rng([0, k]))
+        pastes = json.loads(params["pastes"])
+        assert len(pastes) == params["n_pastes"]
+        n_seen.add(params["n_pastes"])
+
+        # Nothing changes outside the pasted pixels; as many source as pasted pixels.
+        assert np.array_equal(patch[mask != 1], forged[mask != 1])
+        assert (mask == 2).sum() == (mask == 1).sum()
+        # Each paste is an exact copy of its own source. The boxes do not
+        # overlap, so the pasted pixels inside a paste's box are its own.
+        for paste in pastes:
+            r0, c0, r1, c1 = paste["bbox"]
+            dr, dc = paste["src_offset"]
+            rows, cols = np.nonzero(mask[r0:r1, c0:c1] == 1)
+            rows, cols = rows + r0, cols + c0
+            assert np.array_equal(forged[rows, cols], patch[rows + dr, cols + dc])
+            assert np.all(mask[rows + dr, cols + dc] == 2)
+            assert 0.017 < paste["paste_fraction"] < 0.055
+        # The total is the sum of the pastes.
+        total = sum(paste["paste_fraction"] for paste in pastes)
+        assert abs(total - params["paste_fraction"]) < 1e-3
+    assert n_seen == {2, 3, 4}
+
+
+def test_level3_dataset(scenes_dir, tmp_path):
+    tile_scenes(scenes_dir, tmp_path, patch_size=256, patches_per_scene=2,
+                split_counts={"val": 1, "test": 1}, seed=0)
+    build_dataset(tmp_path, level=3, seed=0)
+    manifest = read_manifest(tmp_path / "manifest.csv")
+    forged = manifest[manifest["label"] == 1]
+    assert set(forged["level"]) == {3}
+    assert str(manifest["n_pastes"].dtype) == "Int64"
+    # The details of every paste survive the CSV round trip.
+    for _, row in forged.iterrows():
+        assert len(json.loads(row["pastes"])) == row["n_pastes"]
