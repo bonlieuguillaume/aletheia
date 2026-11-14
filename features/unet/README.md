@@ -9,13 +9,11 @@ Issues #9, #10, #31. U-Net with a ResNet-34 encoder pretrained on ImageNet
   evaluation has run), `iterate_predictions` (a whole split, for the
   evaluation), `build_model`, `loss_function`.
 - **Notebook** `unet.ipynb` drives the training on Colab (**GPU runtime**).
-  Its last cell saves the training curves as `training_curves.png` in the run
-  folder, next to `log.csv` (they can be redrawn from `log.csv` at any time).
 
 | | Where | Content |
 |---|---|---|
 | Reads | `MyDrive/aletheia/data/dataset_v0.1_level1.zip`, unzipped to the VM | output of copy_move |
-| Writes | `MyDrive/aletheia/runs/<run name>/` | `config.json`, `log.csv`, `last.pt`, `best.pt` |
+| Writes | `MyDrive/aletheia/runs/<run name>/` | `config.json`, `log.csv`, `last.pt`, `best.pt`, `training_curves.png` (last cell; can be redrawn from `log.csv` at any time) |
 
 Choices (rationale in `docs/report.md`, section 4):
 - input: linear values converted to dB, then **one global normalization**
