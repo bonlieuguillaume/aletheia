@@ -140,14 +140,17 @@ run folder, so the steps chain through Drive, not through a shared session.
   columns, dataset zips). Mask values 0 / 1 / 2 are defined here.
 - `features/tiling/` - #28: scenes -> 512x512 authentic patches,
   `patches.csv`, split by scene, no-data rule (5 %).
-- `features/copy_move/` - #5, #24: forged twin + mask per patch,
+- `features/copy_move/` - #5, #24, #25: forged twin + mask per patch,
   `manifest.csv` (one row per sample). `LEVELS` maps a level to its
-  generator; levels 2-4 (#25-#27) go there.
+  generator (1 rectangle, 2 varied shapes); levels 3-4 (#26, #27) go there.
+  Every level reuses the same authentic patches and split.
 - `features/unet/` - #9, #10, #31: smp U-Net (ResNet-34, ImageNet),
   reflection padding, BCE + batch Dice, resume from `last.pt`, `predict`.
   `config.json` of a run holds the normalization and the git commit.
 - `features/evaluation/` - #6-#8, #32: model-agnostic metrics; settings
-  (score method, thresholds) chosen on val, frozen in `eval/settings.json`,
-  read back by `unet.load_model`.
+  (score method, thresholds) chosen on val, frozen in
+  `runs/<run>/eval_level<D>_trained<T>/settings.json` (run trained on level
+  T, evaluated on level D); the run's own level is read back by
+  `unet.load_model`. On another level, the own settings stay frozen.
 - `tests/` - pytest on synthetic data (256x256 patches), run by
   `.github/workflows/tests.yml`.

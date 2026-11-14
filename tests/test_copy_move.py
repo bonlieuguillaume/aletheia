@@ -1,9 +1,18 @@
-"""Tests of features/copy_move (issues #5, #24)."""
+"""Tests of features/copy_move (issues #5, #24, #25)."""
 
 import numpy as np
 
-from features.copy_move.copy_move import LEVEL1_BORDER_MARGIN, copy_move_level1
+from features.copy_move.copy_move import (
+    LEVEL1_BORDER_MARGIN,
+    LEVEL2_SHAPES,
+    build_dataset,
+    copy_move_level1,
+    copy_move_level2,
+    ellipse_mask,
+    polygon_mask,
+)
 from features.sar_io.sar_io import read_manifest, read_tif
+from features.tiling.tiling import tile_scenes
 
 
 def test_level1_forgery_is_an_exact_copy_with_a_correct_mask():
@@ -46,3 +55,54 @@ def test_dataset_manifest(dataset_dir):
     # Every forged sample has its mask file.
     for _, row in forged.iterrows():
         assert read_tif(dataset_dir / row["mask_file"]).dtype == np.uint8
+
+
+# ---------------------------------------------------------------------------
+# Level 2 (#25): varied simple shapes
+# ---------------------------------------------------------------------------
+
+def check_exact_copy(patch, forged, mask, params):
+    """The pasted pixels are an exact copy of the source pixels, nothing else changed."""
+    assert np.array_equal(patch[mask != 1], forged[mask != 1])
+    rows, cols = np.nonzero(mask == 1)
+    dr, dc = params["src_offset_row"], params["src_offset_col"]
+    assert np.array_equal(forged[rows, cols], patch[rows + dr, cols + dc])
+    # The source has exactly the shape of the paste, at the offset.
+    assert np.all(mask[rows + dr, cols + dc] == 2)
+    assert (mask == 2).sum() == (mask == 1).sum()
+
+
+def test_level2_shapes_are_exact_copies_of_the_right_size():
+    patch = np.random.default_rng(0).gamma(4.4, 1.0, size=(512, 512)).astype(np.float32)
+    shapes_seen, border_seen = set(), 0
+    for k in range(60):
+        forged, mask, params = copy_move_level2(patch, np.random.default_rng([0, k]))
+        check_exact_copy(patch, forged, mask, params)
+        # The SHAPE (not its box) covers 2-5 % of the patch, up to rounding.
+        assert params["paste_fraction"] == (mask == 1).sum() / 512 ** 2
+        assert 0.017 < params["paste_fraction"] < 0.055
+        shapes_seen.add(params["shape"])
+        border_seen += params["touches_border"]
+    assert shapes_seen == set(LEVEL2_SHAPES)
+    assert border_seen > 0  # pastes may touch the border from level 2 on
+
+
+def test_ellipse_and_polygon_masks():
+    disc = ellipse_mask(101, 101)
+    # A disc fills pi / 4 of its square box.
+    assert abs(disc.mean() - np.pi / 4) < 0.01
+    assert disc[50, 50] and not disc[0, 0]
+    # A regular square polygon (corners on the axes) fills half of its box.
+    square = polygon_mask(100, 100, np.array([1.0, 0.0, -1.0, 0.0]), np.array([0.0, 1.0, 0.0, -1.0]))
+    assert abs(square.mean() - 0.5) < 0.02
+
+
+def test_level2_dataset(scenes_dir, tmp_path):
+    tile_scenes(scenes_dir, tmp_path, patch_size=256, patches_per_scene=2,
+                split_counts={"val": 1, "test": 1}, seed=0)
+    manifest = build_dataset(tmp_path, level=2, seed=0)
+    forged = manifest[manifest["label"] == 1]
+    assert set(forged["level"]) == {2}
+    assert "shape" in manifest.columns and "touches_border" in manifest.columns
+    reread = read_manifest(tmp_path / "manifest.csv")
+    assert str(reread["touches_border"].dtype) == "Int64"

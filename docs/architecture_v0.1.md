@@ -28,7 +28,7 @@ flowchart LR
         PZIP[("patches_v0.1.zip")]
         DZIP[("dataset_v0.1_level1.zip")]
         RUN[("runs/RUN_NAME/<br/>checkpoints, logs")]
-        EVAL[("runs/RUN_NAME/eval/<br/>settings, metrics, maps")]
+        EVAL[("runs/RUN_NAME/eval_levelD_trainedT/<br/>settings, metrics, maps")]
     end
 
     subgraph COLAB["Google Colab"]
@@ -325,7 +325,9 @@ Step by step (the *why* of each choice is in section 7):
      each side;
    - **pixel level**: the threshold of the grid 0.05, ..., 0.95 giving the
      best **mean per-patch pixel MCC** over the forged patches;
-   - the three settings are written to `eval/settings.json` and frozen.
+   - the three settings are written to `settings.json` of the evaluation
+     folder, `runs/<run>/eval_level<D>_trained<T>/` (run trained on level T,
+     evaluated on level D), and frozen.
      `unet.load_model` reads them back, so `unet.predict` applies them.
 4. **Final metrics, on the test set** (`compute_metrics`), with the frozen
    settings:
@@ -365,6 +367,25 @@ but 0.04 % without the band means two thirds of the false alarms sit in the
 band). At level 1 pastes stay 32 px away from the border, so the gap only
 reflects border false alarms (a check of reflection padding, #31); from
 level 2 on, it also shows whether pastes touching the border are missed.
+
+### Scoring a run on another level of forgeries
+
+A run is trained on the forgeries of one level T; it can then be scored on
+the test set of any level D (same authentic patches, same split, other
+forgeries). Results go into the run folder, as `eval_level<D>_trained<T>/`.
+
+| Folder | Weights | Settings (score method, image and pixel thresholds) | Use |
+|---|---|---|---|
+| `eval_level<T>_trained<T>/` | learned on level T | chosen on the **val of level T** (step 3 above) | the run on its own level; read back by `unet.load_model` |
+| `eval_level<D>_trained<T>/` | learned on level T, unchanged | the ones of `eval_level<T>_trained<T>/`, **kept frozen**; the val of level D is not used | **the rule of the project** (`REUSE_SETTINGS = True`): pure generalization, the model is scored exactly as it came out of level T |
+| `eval_level<D>_trained<T>_retuned/` | learned on level T, unchanged | **chosen again on the val of level D**, from this model's predictions on the level-D forgeries, then applied to the level-D test | option kept in the code, **not used** (`REUSE_SETTINGS = False`) |
+
+Why the retuned option is not used: it is a hybrid, a model whose weights
+were fixed on level T with decision settings tuned on level D. Its score
+mixes two things, what the network learned and how well the thresholds fit
+the new forgeries, and would not say whether the model generalizes. If the
+frozen settings suit a new level poorly, the answer is to train on that level
+(a new run, `v0.1_level<D>_resnet34`), not to re-tune the thresholds only.
 
 ### Worked examples
 
@@ -532,6 +553,7 @@ short version; the longer cases follow it.
 | E5 | Pixel threshold on a 0.05 grid | Cheap (the candidates would be 100 million pixel values) | May miss the optimum by < 0.05 | Finer grid |
 | E6 | Pixel MCC averaged per patch as the main figure | Every paste counts the same, whatever its size | The opposite weighting to the loss (M5) | The global value is reported too |
 | E7 | Settings chosen on val, applied once on test | An unbiased test score | Val is used twice (checkpoint, settings), so its scores are optimistic | Report test only |
+| E8 | A run scored on another level keeps its own settings, frozen (`REUSE_SETTINGS = True`, used throughout the project) | Pure generalization: nothing at all is tuned on the new forgeries; the model is judged exactly as it came out of its own level | Thresholds tuned for one kind of paste may suit another poorly | Retrain on the new level. Re-choosing only the thresholds (`False`) exists in the code but is not used: a hybrid of a model fixed on one level and settings tuned on another |
 
 ### 7.2 Why no classification head (M2)
 

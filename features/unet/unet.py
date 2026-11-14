@@ -336,6 +336,9 @@ def train(dataset_dir, run_dir, config=None):
         config["normalization_std"] = std
         config["git_commit"] = git_commit()
         config["dataset_dir"] = str(dataset_dir)
+        # Level of the training forgeries: names the evaluations of the run
+        # (eval_level<L>_trained<this level>, see own_eval_dir).
+        config["dataset_level"] = training_level(manifest)
         config_path.write_text(json.dumps(config, indent=2))
     print(f"Normalization: mean {config['normalization_mean']:.3f}, std {config['normalization_std']:.3f}")
 
@@ -421,16 +424,41 @@ def train(dataset_dir, run_dir, config=None):
 # Prediction
 # ---------------------------------------------------------------------------
 
+def training_level(manifest):
+    """Level(s) of the forgeries of the training split, e.g. 1, or "1+2" for a mix."""
+    forged_train = manifest[(manifest["split"] == "train") & (manifest["label"] == 1)]
+    levels = sorted(int(level) for level in forged_train["level"].dropna().unique())
+    if len(levels) == 1:
+        return levels[0]
+    return "+".join(str(level) for level in levels)
+
+
+def own_eval_dir(run_dir, config):
+    """Folder of the evaluation of a run on its own level.
+
+    Evaluations are named `eval_level<dataset level>_trained<training level>`
+    inside the run folder; on its own level that is e.g. `eval_level1_trained1`.
+    Runs evaluated before this naming used `eval/`, still found here.
+    """
+    run_dir = Path(run_dir)
+    level = config.get("dataset_level", 1)  # runs older than this field: level 1
+    new_dir = run_dir / f"eval_level{level}_trained{level}"
+    legacy_dir = run_dir / "eval"
+    if not new_dir.exists() and legacy_dir.exists():
+        return legacy_dir
+    return new_dir
+
+
 def load_model(run_dir, checkpoint="best.pt", device=None):
     """Load a trained model and the configuration of its run.
 
-    If the evaluation has already chosen its settings on the validation set
-    (`<run_dir>/eval/settings.json`), they are merged into the configuration,
-    so that `predict` uses the chosen score method.
+    If the evaluation of the run on its own level has already chosen its
+    settings on the validation set (`own_eval_dir(...)/settings.json`), they
+    are merged into the configuration, so that `predict` uses them.
     """
     run_dir = Path(run_dir)
     config = json.loads((run_dir / "config.json").read_text())
-    settings_path = run_dir / "eval" / "settings.json"
+    settings_path = own_eval_dir(run_dir, config) / "settings.json"
     if settings_path.exists():
         config.update(json.loads(settings_path.read_text()))
     if device is None:
@@ -466,7 +494,8 @@ def predict(model, config, patch_or_path):
     above the pixel threshold), only if the patch is called forged.
 
     The score method and both thresholds are the ones chosen on the
-    validation set (`eval/settings.json`, merged by `load_model`). Before the
+    validation set (`settings.json` of the run's own evaluation, merged by
+    `load_model`). Before the
     evaluation has run they do not exist yet: "max" and 0.5 are used, the
     same as the monitoring metrics of training.
 
