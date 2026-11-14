@@ -7,7 +7,8 @@ lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects
 Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation);
 scenes preprocessed, tiling (2000 patches), copy-move and a first training
 run and its evaluation done (section 5.1). Last update: 2026-11-13.
-Architecture and metric procedure of v0.1: [architecture_v0.1.md](architecture_v0.1.md).
+Architecture and metric procedure of v0.1, with every trade-off listed in one
+table (section 7): [architecture_v0.1.md](architecture_v0.1.md).
 
 ## 1. Goal and scope
 
@@ -284,7 +285,7 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
     also light up the source (a false positive on genuine pixels, larger for
     larger pastes), in exchange for a simpler learning of the duplication cue
     and a fair comparison between methods
-    ([architecture_v0.1.md](architecture_v0.1.md), section 5).
+    ([architecture_v0.1.md](architecture_v0.1.md), section 7.4).
   - *Prevalence (later, #36):* our sets are 50 % forged, forgeries are rare
     in practice. The model's probabilities embed that 50 % prior, and a small
     false-positive rate turns into many false alarms at low prevalence; scores
@@ -323,7 +324,7 @@ image MCC 0.944, mean pixel MCC 0.979 at epoch 15.
   #25-#27).
 
 **Settings chosen on val** (`eval/settings.json`, rule of
-[architecture_v0.1.md](architecture_v0.1.md), section 5, step 3):
+[architecture_v0.1.md](architecture_v0.1.md), section 5, step 3, and section 7.5):
 
 | Score method | Val image MCC | Threshold (middle) | Margin |
 |---|---|---|---|

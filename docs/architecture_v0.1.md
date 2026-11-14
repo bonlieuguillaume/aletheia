@@ -1,14 +1,19 @@
 # Architecture of v0.1: copy-move mockup
 
 How v0.1 turns Sentinel-1 scenes into a detector and a measured result: the
-data pipeline, the model, the flow between training, validation and test, and
-the exact procedure of the metrics. The *why* of each choice is in
+data pipeline, the model, the flow between training, validation and test, the
+exact procedure of the metrics, the formulas, and **every trade-off in one
+place** (section 7). The history of the decisions is in
 [report.md](report.md); the tasks are in the
 [GitHub Project](https://github.com/users/bonlieuguillaume/projects/5).
 
 > The diagrams are written in Mermaid: GitHub renders them. In VS Code, the
 > built-in Markdown preview needs the "Markdown Preview Mermaid Support"
 > extension to show them.
+
+Contents: 1. Overview · 2. Data · 3. Model: segmentation, then decision ·
+4. Training, validation, test · 5. Metrics: the exact procedure · 6. Key
+formulas · 7. Trade-offs · 8. Reproducibility
 
 ## 1. Overview
 
@@ -59,9 +64,9 @@ flowchart TB
         V["2 scenes<br/>VAL"]
         X["2 scenes<br/>TEST"]
     end
-    T --> TP["~1,200 authentic patches<br/>+ their 1,200 forged twins"]
-    V --> VP["~400 + 400"]
-    X --> XP["~400 + 400"]
+    T --> TP["1,200 authentic patches<br/>+ their 1,200 forged twins"]
+    V --> VP["400 + 400"]
+    X --> XP["400 + 400"]
 ```
 
 - **Patch**: 512x512 px (5.12 km at 10 m), cropped, never resized; rejected
@@ -80,9 +85,9 @@ flowchart TB
 
 ### Input of the network: dB conversion, then normalization
 
-The files stay in **linear** values on disk (recommended SNAP export:
-calibrated intensity, float32, linear). Every patch then goes through two
-steps, in memory, always in the same order, in training and in prediction
+The files stay in **linear** values on disk (SNAP export: calibrated
+intensity, float32, linear). Every patch then goes through two steps, in
+memory, always in the same order, in training and in prediction
 (`unet.to_model_scale`, then the normalization in `SARPatchDataset.load` and
 `unet.predict_probabilities`). No raw pixel ever enters the network.
 
@@ -108,25 +113,19 @@ flowchart LR
 - Zeros (no-data, very dark pixels) are clamped to $10^{-6}$ before the log,
   so they give a finite value (-60 dB) instead of $-\infty$.
 
-**2. Why a global standardization.** $\tilde{x} = (x_{dB} - \mu) / \sigma$,
-with $\mu$ and $\sigma$ computed **once**, on authentic training patches only,
-and saved in the `config.json` of the run; the same values are applied to
-every patch of every split. The network then sees values centred on 0 with a
+**2. Global standardization.** $\tilde{x} = (x_{dB} - \mu) / \sigma$, with
+$\mu$ and $\sigma$ computed **once**, on authentic training patches only, and
+saved in the `config.json` of the run; the same values are applied to every
+patch of every split. The network then sees values centred on 0 with a
 standard deviation of 1, the scale the ImageNet-pretrained encoder was trained
-on.
-
-- *Global, not per patch:* a per-patch standardization would erase the
-  radiometric differences between regions, which splicing detection (v0.3)
-  relies on.
-- *It absorbs constant factors.* Intensity is the square of amplitude, so
-  giving amplitude instead of intensity halves every dB value
-  ($10 \log_{10} A = \tfrac{1}{2} \cdot 10 \log_{10} I$); but $\mu$ and $\sigma$
-  are halved too, and $(0.5 x - 0.5 \mu) / (0.5 \sigma) = (x - \mu) / \sigma$:
-  the network receives exactly the same values. Likewise, a calibration
-  constant (a factor in linear, an offset in dB) is removed by subtracting
-  $\mu$. Condition: **all scenes processed the same way** (all intensity or
-  all amplitude, same calibration); a global normalization absorbs a factor
-  common to the dataset, not a mixture.
+on. It also absorbs constant factors: intensity is the square of amplitude,
+so giving amplitude instead of intensity halves every dB value
+($10 \log_{10} A = \tfrac{1}{2} \cdot 10 \log_{10} I$), but $\mu$ and $\sigma$
+are halved too, and $(0.5 x - 0.5 \mu) / (0.5 \sigma) = (x - \mu) / \sigma$:
+the network receives exactly the same values. Likewise, a calibration
+constant (a factor in linear, an offset in dB) is removed by subtracting
+$\mu$. Condition: **all scenes processed the same way** (all intensity or all
+amplitude, same calibration). Global rather than per patch: see section 7.
 
 **If the scenes are exported in dB anyway**, the conversion must be the very
 last step of the SNAP graph, after terrain correction (which interpolates
@@ -140,7 +139,50 @@ network that re-normalize the activations between layers: they are part of
 the architecture and are learned with it, whereas this standardization is a
 fixed preprocessing of the input data.
 
-## 3. Model
+## 3. Model: segmentation, then decision
+
+### 3.1 In short
+
+```mermaid
+flowchart LR
+    P["patch<br/>1 x 512 x 512"] --> NET["U-Net<br/>(ResNet-34 encoder)"] --> MAP["probability map<br/>1 x 512 x 512"]
+    MAP --> AGG["image score S<br/>aggregation of the map<br/>(p99.5 in v0.1)"] --> DEC{"S >= image<br/>threshold?"}
+    DEC -- yes --> FORGED["FORGED<br/>+ zone = pixels >= pixel threshold"]
+    DEC -- no --> AUTH["authentic<br/>no zone shown"]
+```
+
+- **The network does one thing: binary segmentation.** For each pixel it
+  outputs the probability that the pixel was pasted: a map of shape
+  (B, 1, 512, 512), one sigmoid per pixel. The loss (BCE + Dice) is computed
+  on that map only. There is no "forged yes / no" output.
+- **The image decision is derived from the map, afterwards.** The map is
+  summarized into one image score (an aggregation of its highest pixels,
+  e.g. the 99.5th percentile), compared to an image threshold: "forged" or
+  "authentic". If forged, the **zone** is the set of pixels above a pixel
+  threshold. Score method and both thresholds are chosen on the validation
+  set (section 5). So the tool does both segmentation and classification,
+  but the classification lives in this post-processing, not in the network.
+- **Why the decision works.** Authentic patches are in the training set with
+  an empty mask: the BCE punishes every pixel lit up on them, so the network
+  learns to output a dark map on an authentic image, and the image score
+  stays low.
+- **The ResNet-34 encoder is a feature extractor, not a classifier.** It is
+  the contracting half of the U-Net; its original classification layer is
+  removed. Two distinct gains: its residual shortcuts make a deep encoder
+  trainable (the gradient flows back through the shortcuts), and its ImageNet
+  pre-training gives ready-made edge and texture filters, decisive with only
+  1,200 authentic training patches.
+- **Output shapes in general.** Binary segmentation: 1 channel + sigmoid +
+  BCE (equivalent to 2 channels + softmax + cross-entropy). Several exclusive
+  classes: C channels + softmax (the C probabilities of a pixel sum to 1) +
+  cross-entropy against a map of class indices; the prediction is the argmax
+  over the channels. Our masks already hold 3 values (background, pasted,
+  source): a 3-class segmentation could tell the source from the paste (#38).
+  Segmentation adds overlap losses (Dice, IoU) to fight the class imbalance
+  (95-98 % of the pixels are background).
+- **Why no classification head**: section 7.
+
+### 3.2 The network
 
 ```mermaid
 flowchart LR
@@ -199,18 +241,18 @@ networks train.
   last step, 256 -> 512, has no skip (no 512 stage in the encoder); a final
   3x3 convolution reduces the channels to 1, the probability map.
 
-- **Encoder**: a ResNet-34 (residual blocks, short additive shortcuts) whose
-  ImageNet weights give it ready-made edge and texture filters; its first
-  layer is adapted to one channel.
-- **Decoder**: upsamples back to 512x512; the **skip connections** bring the
-  fine details of the encoder back, so the map follows the paste's edges.
+**Settings of the model and its training:**
+
+- Encoder ResNet-34, ImageNet weights, first layer adapted to one channel;
+  decoder trained from scratch; the skip connections bring the fine details
+  back, so the map follows the paste's edges.
 - **Reflection padding** in every convolution (#31): no artificial edge of
   zeros at the patch border.
-- **Loss**: BCE + Dice computed over the batch, on `mask == 1`, source pixels
-  ignored.
+- **Loss**: BCE + Dice, computed over the whole batch, source pixels ignored
+  (formulas: section 6).
 - **Optimization**: AdamW, learning rate 3e-4 decayed along a cosine over the
-  planned epochs, weight decay 1e-4, batches of 8, mixed precision (why:
-  [report.md](report.md), section 4).
+  planned epochs, weight decay 1e-4, batches of 8, mixed precision
+  ([report.md](report.md), section 4).
 
 ## 4. Training, validation, test
 
@@ -236,6 +278,11 @@ sequenceDiagram
 used once, at the end; changing anything after seeing the test results would
 make it a second validation set and its score optimistic.
 
+During training, two monitoring metrics are printed every epoch, on val, with
+fixed choices ("max" score, thresholds 0.5): `val_image_mcc_at_0.5` and
+`val_pixel_mcc_at_0.5` (mean per forged patch). They only show the progress;
+no decision uses them.
+
 ## 5. Metrics: the exact procedure
 
 ```mermaid
@@ -249,15 +296,16 @@ flowchart TB
     TESTM --> FA["Authentic patches<br/>fraction of flagged pixels<br/>(also without the 16-px border)"]
 ```
 
-Step by step:
+Step by step (the *why* of each choice is in section 7):
 
 1. **Prediction.** For every sample, the model outputs a probability map:
    512x512 values in [0, 1], the probability that each pixel was pasted.
 2. **Per-sample statistics** (`sample_statistics`). Thresholds are not known
    yet, so everything is stored for every candidate:
    - the image score with each method: `max` (highest pixel), `top0.5%`,
-     `top1%`, `top2%` (mean of the highest pixels, robust to one noisy pixel;
-     k must stay below the smallest paste) and `p99.5` (percentile);
+     `top1%`, `top2%` (mean of the 0.5 / 1 / 2 % highest pixels) and `p99.5`
+     (99.5th percentile, one value). The image score is never the mean of all
+     the pixels: a paste covers only 2-5 % of the patch;
    - for a forged patch, the pixel counts TP / FP / FN / TN for each pixel
      threshold 0.05, 0.10, ..., 0.95, comparing `map >= threshold` with
      `mask == 1`, **source pixels excluded** (neither hit nor false alarm),
@@ -265,52 +313,28 @@ Step by step:
    - for an authentic patch, the fraction of pixels above each threshold
      (false alarms).
 3. **Settings, on the validation set** (`choose_thresholds`):
-   - image level: for each score method, every distinct score value is tried
-     as a threshold ("forged" if score >= threshold). Neighbouring thresholds
-     often reach the same best **image MCC**: they form an interval of equally
-     good thresholds, and its **middle** is kept, not its edge, so that a
-     small shift of the scores on new images changes fewer decisions; the
-     width of that interval is the **margin**. The method with the best image
-     MCC is kept; between methods with the same MCC, the one with the widest
-     margin (the most robust), not the first of the list.
-     - *The bounds of the interval* are the two patches closest to the
-       boundary: the highest score that must stay below the threshold and
-       the lowest score that must be above it. No val patch scores in
-       between, so every threshold in between gives the same decisions.
-       Patches that are on the wrong side whatever the threshold (the errors
-       left at the best MCC) are not bounds: they cannot be recovered.
-     - *Example:* the patch that must stay below scores 0.30, the one that
-       must be above scores 0.97. The former rule took 0.97, touching the
-       patch above; the middle, 0.635, keeps 0.335 on each side. On the
-       first v0.1 run (top0.5% score), the interval was (0.081, 0.997]: the
-       former rule sat at 0.997 although a margin of 0.916 was available.
-     - Same idea as the maximum-margin boundary of support vector machines
-       (SVM): among the boundaries that separate equally well, take the one
-       furthest from the closest points;
-   - pixel level: the threshold giving the best **mean per-patch pixel MCC**
-     over the forged patches is kept;
-   - *Why the scores themselves rather than a grid, for the image threshold:*
-     decisions only change when the threshold crosses the score of a patch;
-     between two neighbouring scores every threshold gives exactly the same
-     decisions. Trying each score therefore tries every possible set of
-     decisions (at most ~800 cheap tries) and cannot miss the best one. A
-     grid can: with saturated scores (authentic up to 0.9968, forged from
-     0.9978), a 0.01 step only tries 0.99 (one false alarm) and 1.00 (one
-     miss), and no step is fine enough for sure. The rounder threshold a grid
-     would give is recovered by taking the middle of the optimal interval.
-   - *Why a grid for the pixel threshold:* the candidates would be every
-     pixel value, 400 patches x 262,144 pixels, and the mean per-patch pixel
-     MCC changes slowly with the threshold: a 0.05 step is close enough.
+   - **image level**: for each score method, every distinct score obtained
+     on val is tried as a threshold ("forged" if score >= threshold), up to
+     ~800 tries. Neighbouring thresholds often reach the same best image
+     MCC: they form an interval of equally good thresholds, whose bounds are
+     the two patches closest to the boundary (the highest score that must
+     stay below, the lowest that must be above). The **middle** of that
+     interval is kept; its width is the **margin**. The method with the best
+     image MCC is kept; between methods with the same MCC, the one with the
+     widest margin. Example: bounds 0.30 and 0.97 give 0.635, with 0.335 on
+     each side;
+   - **pixel level**: the threshold of the grid 0.05, ..., 0.95 giving the
+     best **mean per-patch pixel MCC** over the forged patches;
    - the three settings are written to `eval/settings.json` and frozen.
+     `unet.load_model` reads them back, so `unet.predict` applies them.
 4. **Final metrics, on the test set** (`compute_metrics`), with the frozen
    settings:
    - **image level**: one decision per patch, then the confusion matrix over
-     the ~800 test patches, **MCC** and **F1**; **ROC AUC** from the raw
+     the 800 test patches, **MCC** and **F1**; **ROC AUC** from the raw
      scores (threshold-free);
    - **pixel level**, forged patches only: MCC and F1 of each patch, then
-     **averaged** (each paste counts the same) and **global** (all pixels
-     pooled, each pixel counts the same); the mean MCC is also given without
-     the border band;
+     **averaged** (main figure) and **global** (all pixels pooled); the mean
+     MCC is also given without the border band;
    - **authentic patches**: mean fraction of pixels flagged by mistake
      (ideally 0), also given without the border band. For each authentic
      patch, the map is thresholded with the frozen pixel threshold, and
@@ -322,59 +346,6 @@ Step by step:
      its image score stays below the image threshold.
 5. **Breakdown.** The per-sample table is joined with the manifest, so the
    results can be sliced by level, paste size or scene.
-
-### Why the source pixels are ignored
-
-**The problem.** A copy-move copies a region A (the **source**, `mask == 2`)
-and pastes it at B (the **target**, `mask == 1`). B becomes an exact copy of
-A, pixel for pixel:
-
-```
-  forged patch
-  +--------------------+
-  |   +--+             |
-  |   |A |             |   A = the original (genuine)
-  |   +--+             |
-  |           +--+     |
-  |           |B |     |   B = the copy (the forgery)
-  |           +--+     |
-  +--------------------+
-```
-
-From the image, one sees two identical regions, but almost nothing says which
-one is the original: the only clue is subtle (B has artificial seams with its
-new surroundings, A does not). A detector will therefore often find "there is
-a duplicate here" and light up **both A and B**, although the right answer is
-B only. What should be done with A?
-
-**The three options.**
-
-| Option | Consequence |
-|---|---|
-| Count A as a **false alarm** | Punishes the model for something almost impossible to avoid, and punishes duplicate-finding methods (block correlation, Vertical 52 keypoint matching), which by construction always find both twins. |
-| Count A as a **hit** | Rewards lighting up a region that is genuine: wrong. |
-| **Ignore A** (chosen) | A's pixels count neither as an error nor as a success, in the **loss** and in the **pixel metrics**. The model is judged on two questions only: does it find B, and does it light up the rest of the patch by mistake? |
-
-**The trade-off of ignoring A.**
-
-- *Gained:* simpler learning (the model can rely fully on the cue "these two
-  regions are identical" to find B, without being held back by having to
-  guess which twin is the copy) and a fair comparison (U-Net, block
-  correlation and Vertical 52 are scored the same way, although the last two
-  always light up A and B).
-- *Accepted:* the model is never punished for lighting up A, so in practice
-  its map will often show two regions: B, the real forgery, and A, genuine
-  pixels lit up by mistake. That false positive is **not counted** by our
-  metrics. And since A and B have the same size, **the larger the paste, the
-  larger that genuine area lit up by mistake**.
-- *Why the cost is acceptable:* for an analyst, two twin regions lit up lead
-  straight to the right conclusion, "this region was duplicated"; which twin
-  is the copy is then usually clear from the context (a forest covering a
-  base). This is how Vertical 52 presents its own results.
-
-Telling A from B is planned for later (#38): nothing has to be regenerated,
-the mask already separates them (`1` for B, `2` for A); only the counting
-rule changes (see `v_i` in section 6).
 
 ### What "without a 16-px border" measures (#32)
 
@@ -395,7 +366,9 @@ band). At level 1 pastes stay 32 px away from the border, so the gap only
 reflects border false alarms (a check of reflection padding, #31); from
 level 2 on, it also shows whether pastes touching the border are missed.
 
-Worked example, image level, 400 forged + 400 authentic test patches:
+### Worked examples
+
+Image level, 400 forged + 400 authentic test patches:
 
 | | flagged | not flagged |
 |---|---|---|
@@ -436,36 +409,50 @@ $$h = \mathrm{round}\big(\sqrt{a N^2 r}\big), \qquad w = \mathrm{round}\big(\sqr
 descending.
 
 **Target and valid pixels**: the forgery to find, and the pixels that count
-(the source is excluded, see section 5):
+(the source is excluded, see section 7):
 
 $$t_i = \mathbb{1}[m_i = 1], \qquad v_i = \mathbb{1}[m_i \neq 2]$$
 
 For an authentic patch, $t_i = 0$ and $v_i = 1$ everywhere.
 
 **Loss** (`unet.loss_function`), sums over all pixels of all patches of the
-batch:
+batch at once (not one loss per patch, see section 7):
 
 $$\mathrm{BCE} = \frac{\sum_i v_i \cdot \ell_i}{\sum_i v_i}, \qquad \ell_i = -\big[t_i \log p_i + (1 - t_i) \log(1 - p_i)\big]$$
 
 $$\mathrm{Dice}_{batch} = \frac{2 \sum_i v_i \cdot p_i \cdot t_i}{\sum_i v_i \cdot p_i + \sum_i v_i \cdot t_i + \varepsilon}, \qquad \mathcal{L} = \mathrm{BCE} + (1 - \mathrm{Dice}_{batch})$$
 
-Multiplying by $v_i$ removes the source pixels from every sum: this is how the
-source is ignored. Worked example: 4 pixels, one background ($t = 0$), one
-pasted ($t = 1$), two source ($v = 0$); the per-pixel BCE terms are
+*How Dice works.* For two hard regions, $\mathrm{Dice} = 2|P \cap T| / (|P| + |T|)$:
+1 if they coincide, 0 if they do not touch (a 100-px paste and a 100-px
+prediction sharing 80 px give 0.8). The "soft" version above replaces the
+counts by sums of probabilities: the numerator rewards probability inside the
+paste, the denominator penalizes probability outside it. Background pixels
+correctly at 0 appear nowhere, so 98 % of easy background earns nothing, and
+an empty map scores 0: this is why Dice resists the class imbalance where BCE
+alone does not.
+
+*How $v_i$ removes the source.* Multiplying by $v_i$ removes the source
+pixels from every sum. Worked example: 4 pixels, one background ($t = 0$),
+one pasted ($t = 1$), two source ($v = 0$); the per-pixel BCE terms are
 $\ell = (0.1, 0.2, 2.0, 2.0)$, the last two high because the model lights up
 the source. Without $v$: $\mathrm{BCE} = (0.1 + 0.2 + 2.0 + 2.0) / 4 = 1.08$,
 the source is punished. With $v = (1, 1, 0, 0)$:
 $\mathrm{BCE} = (0.1 + 0.2 + 0 + 0) / 2 = 0.15$, as if the source pixels did
-not exist (the denominator, $\sum_i v_i$, counts only the valid pixels). $\varepsilon = 10^{-6}$ only guards against a division by
-zero. It is **not** the smoothing constant $s$ of a per-patch Dice,
-$(2I + s) / (P + T + s)$: that one solves a different problem (an authentic
-patch has an empty mask, so its own Dice would be $0/0$), which the batch Dice
-avoids since every batch holds forged patches. Per-patch Dice with $s$ is only
-the fallback for level 4 (#27).
+not exist (the denominator, $\sum_i v_i$, counts only the valid pixels).
+
+$\varepsilon = 10^{-6}$ only guards against a division by zero. It is **not**
+the smoothing constant $s$ of a per-patch Dice, $(2I + s) / (P + T + s)$: that
+one solves a different problem (an authentic patch has an empty mask, so its
+own Dice would be $0/0$), which the batch Dice avoids since every batch holds
+forged patches.
 
 **Image score** (`evaluation.image_score`), from the map of one patch:
 
 $$S_{max} = \max_i p_i, \qquad S_{top\text{-}k} = \text{mean of the } \lceil k N^2 \rceil \text{ largest } p_i, \qquad S_{p99.5} = \text{99.5th percentile of the } p_i$$
+
+**Decision and zone** (`unet.predict`), with the frozen settings:
+
+$$\text{forged} = \mathbb{1}[S \geq \tau_{img}], \qquad \text{zone} = \{\, i : p_i \geq \tau_{pix} \,\} \text{ if forged, } \emptyset \text{ otherwise}$$
 
 **Confusion counts** at a pixel threshold $\tau$ (`evaluation.confusion_counts`),
 with $\hat{y}_i = \mathbb{1}[p_i \geq \tau]$:
@@ -487,13 +474,7 @@ coefficient.
 $$\mathrm{MCC}_{mean} = \frac{1}{K} \sum_{k=1}^{K} \mathrm{MCC}(\text{counts}_k), \qquad \mathrm{MCC}_{global} = \mathrm{MCC}\Big(\sum_{k=1}^{K} \text{counts}_k\Big)$$
 
 In the mean, each paste counts the same; in the global value, each pixel does
-(large pastes weigh more). So in the mean, a missed 2 % paste lowers the
-score as much as a missed 5 % one, while in the global value a model that
-finds the large pastes and misses the small ones can still score well. The
-**mean is the main pixel metric** (it is also the one the pixel threshold is
-chosen on): we want every forgery located, whatever its size. Two close
-values (0.9926 and 0.9929 on the v0.1 test) mean the localization does not
-depend on the paste size.
+(large pastes weigh more).
 
 **False alarms** on an authentic patch, over a pixel set $\Omega$ (the whole
 patch, $|\Omega| = 262{,}144$, or the central square without the 16-px band,
@@ -513,7 +494,148 @@ interval (the margin).
 chosen forged patch gets a higher score than a randomly chosen authentic one
 (0.5 = chance, 1 = perfect ranking).
 
-## 7. Reproducibility
+## 7. Trade-offs
+
+Every choice below gains something and accepts a cost. The table gives the
+short version; the longer cases follow it.
+
+### 7.1 Summary
+
+| # | Choice | Gained | Accepted cost | If it becomes a problem |
+|---|---|---|---|---|
+| **Data** | | | | |
+| D1 | Crop 512x512, never resize | Fine-scale traces (speckle, seams) intact | A patch sees only 5 km of context | Larger patches, or a multi-scale model |
+| D2 | Reject a patch with > 5 % no-data | No empty terrain-correction borders in the data | Coastal scenes lose many patches (ds_forest_7: 568 valid windows) | Fewer patches per scene, or a higher threshold |
+| D3 | Split by scene, 6/2/2 | No landscape of the test seen in training | The test rests on 2 scenes only | Scene cross-validation (5 trainings) |
+| D4 | Balance orbits by east-west mirroring | Same look geometries in train / val / test | In v0.1, val and test "ascending" scenes are mirrored descending ones | Force a real ascending scene into test (`FORCED_SPLITS`) |
+| D5 | Augmentation: east-west mirror only | Only physically plausible images | Little augmentation | Compared with none in #37 |
+| D6 | Forgeries precomputed, fixed | Simple, reproducible, val / test fixed | The model sees the same 1,200 train pastes every epoch and can memorize them | On-the-fly generation for train (#29) |
+| D7 | Global normalization, not per patch | Keeps the radiometric differences between regions (splicing, v0.3) | All scenes must be processed the same way | Re-export the odd scene |
+| D8 | dB input | Compressed dynamic range, additive speckle | Linear values must be converted at load time | `input_scale = "db"` if exported in dB |
+| **Model and loss** | | | | |
+| M1 | Supervised U-Net, not an auto-encoder | Free masks are used; a copy-move (genuine SAR) would be well reconstructed, hence invisible to an auto-encoder | Only detects the forgery types it was trained on | Auto-encoder kept as a comparison |
+| M2 | Segmentation + decision derived from the map, no classification head | A "forged" decision is always backed by a visible zone; one loss | The decision only sees the highest pixels, not a global context | Add a head (7.2) |
+| M3 | ResNet-34 pretrained encoder | Trainable depth (shortcuts) + good start with 1,200 patches (ImageNet) | Filters learned on optical photos, not SAR | Fine-tuned anyway; SAR-pretrained encoder later |
+| M4 | BCE + Dice, not one alone | Dice: resists the 97 % background; BCE: punishes every false pixel, including on authentic patches | Two terms with equal weights | Weight them if one dominates |
+| M5 | Loss over the whole batch, not per patch (7.3) | No 0/0 on authentic patches, no smoothing constant, stable gradients; large forgeries (a hidden base) weigh more | Small pastes weigh less in training | Per-patch Dice with smoothing (level 4, #27) |
+| M6 | Source pixels ignored (7.4) | Learning relies fully on "these two regions are identical"; fair comparison with duplicate-finding methods | The source lit up by mistake is not counted | 3-class segmentation (#38) |
+| M7 | Reflection padding | No artificial zero edge at the border | None measurable at level 1 | Checked by the 16-px border metrics (#32) |
+| **Training** | | | | |
+| T1 | Checkpoint chosen on the val loss, not the val MCC | Threshold-free criterion | Loss and MCC can disagree (v0.1: best MCC at epoch 6, best loss at 15) | Select on the val MCC after the threshold search |
+| T2 | Early stopping, patience 8 | Stops over-fitting, saves GPU time | May stop before a late gain of the cosine schedule | Higher patience |
+| T3 | Batch of 8 | Fits a T4 (16 GB) at 512x512 | Noisier updates than larger batches | Gradient accumulation |
+| **Evaluation** | | | | |
+| E1 | MCC as the main metric | Uses the whole confusion matrix, robust to the 97 % background | Less common than F1 in the literature | F1 reported too |
+| E2 | Image score from the highest pixels (max, top-k, percentile), chosen on val | Not diluted by the 95 % of background | top-k requires k below the smallest paste (2 %) | Restrict the methods per level |
+| E3 | Image thresholds tried among the val scores, not on a grid (7.5) | Exact: every possible set of decisions is tried | None (at most ~800 cheap tries) | — |
+| E4 | Image threshold in the middle of the optimal interval, ties by margin (7.5) | Robust to a shift of the scores on new images | A threshold no val patch sits on | — |
+| E5 | Pixel threshold on a 0.05 grid | Cheap (the candidates would be 100 million pixel values) | May miss the optimum by < 0.05 | Finer grid |
+| E6 | Pixel MCC averaged per patch as the main figure | Every paste counts the same, whatever its size | The opposite weighting to the loss (M5) | The global value is reported too |
+| E7 | Settings chosen on val, applied once on test | An unbiased test score | Val is used twice (checkpoint, settings), so its scores are optimistic | Report test only |
+
+### 7.2 Why no classification head (M2)
+
+A head on the bottleneck of the U-Net (global pooling + a linear layer,
+possible with `aux_params` in `segmentation-models-pytorch`), trained jointly
+with an image-level BCE, would give a second output "forged yes / no".
+
+- *For:* the decision could use a global context of the patch, not only its
+  highest pixels.
+- *Against:* one more loss to weight, $\mathcal{L} = \mathcal{L}_{seg} + \lambda \cdot \mathrm{BCE}_{img}$,
+  with $\lambda$ to tune. Above all, the decision and the map could
+  **contradict each other**: an image declared forged with no zone lit up,
+  or a zone lit up on an image declared authentic.
+- *Our choice:* the decision is derived from the map, so a "forged" decision
+  is always justified by a localized zone, which is what an image analyst
+  needs to check it.
+
+### 7.3 Loss over the whole batch rather than per patch (M5)
+
+The BCE is the mean over all valid pixels of the 8 patches of the batch, and
+the Dice is one Dice over the 8 patches at once (sums over all their pixels).
+A 5 % paste therefore brings 2.5 times more pixels to the sums than a 2 %
+paste: **large pastes weigh more in training**.
+
+- *Gained:* the Dice of an authentic patch alone is $0/0$ (empty mask); over
+  the batch there are always forged patches, so no division by zero and no
+  smoothing constant, whose value would bias the learning; the gradients are
+  steadier. Weighing large forgeries more matches the priority (a hidden base
+  is large), and at level 1 pastes only range from 2 to 5 %.
+- *Accepted:* small pastes weigh less in training.
+- *Safeguard:* the model is **judged** with the opposite weighting: the main
+  pixel metric is averaged per patch (E6), so a poorly learned small paste
+  shows up in the score. Fallback: per-patch Dice with smoothing at level 4
+  (#27), where sizes vary widely.
+
+### 7.4 Why the source pixels are ignored (M6)
+
+A copy-move copies a region A (the **source**, `mask == 2`) and pastes it at
+B (the **target**, `mask == 1`). B becomes an exact copy of A, pixel for
+pixel:
+
+```
+  forged patch
+  +--------------------+
+  |   +--+             |
+  |   |A |             |   A = the original (genuine)
+  |   +--+             |
+  |           +--+     |
+  |           |B |     |   B = the copy (the forgery)
+  |           +--+     |
+  +--------------------+
+```
+
+From the image, one sees two identical regions, but almost nothing says which
+one is the original: the only clue is subtle (B has artificial seams with its
+new surroundings, A does not). A detector will therefore often find "there is
+a duplicate here" and light up **both A and B**, although the right answer is
+B only.
+
+| Option for A | Consequence |
+|---|---|
+| Count A as a **false alarm** | Punishes the model for something almost impossible to avoid, and punishes duplicate-finding methods (block correlation, Vertical 52 keypoint matching), which by construction always find both twins. |
+| Count A as a **hit** | Rewards lighting up a region that is genuine: wrong. |
+| **Ignore A** (chosen) | A's pixels count neither as an error nor as a success, in the **loss** and in the **pixel metrics** ($v_i = 0$, section 6). The model is judged on two questions only: does it find B, and does it light up the rest of the patch by mistake? |
+
+- *Gained:* simpler learning (the model can rely fully on the cue "these two
+  regions are identical" to find B) and a fair comparison (U-Net, block
+  correlation and Vertical 52 are scored the same way).
+- *Accepted:* the model is never punished for lighting up A, so its map will
+  often show B and A. That false positive is **not counted**, and since A and
+  B have the same size, the larger the paste, the larger that genuine area
+  lit up by mistake.
+- *Why acceptable:* for an analyst, two twin regions lit up lead straight to
+  the right conclusion, "this region was duplicated"; which twin is the copy
+  is then usually clear from the context. This is how Vertical 52 presents
+  its own results.
+
+Telling A from B is planned for later (#38): nothing has to be regenerated,
+the mask already separates them; only the counting rule changes.
+
+### 7.5 How the image threshold is searched (E3, E4)
+
+- **Among the scores, not on a grid.** Decisions only change when the
+  threshold crosses the score of a patch; between two neighbouring scores
+  every threshold gives exactly the same decisions. Trying each score
+  therefore tries every possible set of decisions and cannot miss the best
+  one. A grid can: with saturated scores (authentic up to 0.9968, forged from
+  0.9978), a 0.01 step only tries 0.99 (one false alarm) and 1.00 (one miss),
+  and no step is fine enough for sure.
+- **The middle of the optimal interval, not its edge.** The interval of
+  equally good thresholds is bounded by the two patches closest to the
+  boundary; patches on the wrong side whatever the threshold (the errors left
+  at the best MCC) are not bounds. Taking its edge puts the threshold right
+  against a patch, so a slightly weaker forgery on new images would be
+  missed. In v0.1, with the top0.5% score, the interval was (0.081, 0.997]:
+  the edge would sit at 0.997 although a margin of 0.916 was available.
+- **Ties between score methods broken by the margin**, not by the order of
+  the list: in v0.1, four methods tied at the best val MCC (0.993); p99.5 had
+  the widest margin (0.992).
+- Same idea as the maximum-margin boundary of support vector machines (SVM):
+  among the boundaries that separate equally well, take the one furthest from
+  the closest points.
+
+## 8. Reproducibility
 
 - Every random draw is seeded: scene split, patch draw (per scene),
   forgeries (per patch), training.
