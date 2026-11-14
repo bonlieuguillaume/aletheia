@@ -675,6 +675,13 @@ the mask already separates them; only the counting rule changes.
   against a patch, so a slightly weaker forgery on new images would be
   missed. In v0.1, with the top0.5% score, the interval was (0.081, 0.997]:
   the edge would sit at 0.997 although a margin of 0.916 was available.
+
+  ![Image threshold in the middle of the interval of equally good thresholds](figures/image_threshold_margin.svg)
+
+  For a fixed score method, any threshold between the highest authentic score
+  and the lowest forged score gives the same decisions on val; the middle is
+  kept, the furthest from both clusters, so it generalizes best to new images
+  (illustrative values).
 - **Ties between score methods broken by the margin**, not by the order of
   the list: in v0.1, four methods tied at the best val MCC (0.993); p99.5 had
   the widest margin (0.992).
