@@ -9,6 +9,8 @@ Issues #9, #10, #31. U-Net with a ResNet-34 encoder pretrained on ImageNet
   evaluation has run), `iterate_predictions` (a whole split, for the
   evaluation), `build_model`, `loss_function`.
 - **Notebook** `unet.ipynb` drives the training on Colab (**GPU runtime**).
+  Its last cell saves the training curves as `training_curves.png` in the run
+  folder, next to `log.csv` (they can be redrawn from `log.csv` at any time).
 
 | | Where | Content |
 |---|---|---|
