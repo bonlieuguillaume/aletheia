@@ -1,4 +1,4 @@
-"""Generate copy-move forgeries with their ground-truth masks (issues #5, #24).
+"""Generate copy-move forgeries with their ground-truth masks (issues #5, #24, #25).
 
 For every authentic patch written by `tiling`, one forged twin is made: a
 region of the patch is copied and pasted elsewhere in the same patch.
@@ -11,7 +11,10 @@ Output, in the dataset folder (next to `real/` and `patches.csv`):
 
 Level 1 (#24): one rectangle of 2-5 % of the patch area, source and target
 inside the patch, not overlapping, both at least 32 px from the border, no
-transform, hard edges. Other levels (#25-#27) will be added to `LEVELS`.
+transform, hard edges.
+Level 2 (#25): the same, with a shape drawn among rectangle, ellipse and
+slightly irregular polygon, and pastes allowed to touch the border.
+Levels 3-4 (#26, #27) will be added to `LEVELS`.
 
 Every forgery is drawn from a random generator seeded by (seed, patch index):
 the same seed always gives the same dataset, and any single forgery can be
@@ -148,8 +151,189 @@ def copy_move_level1(patch, rng, area_range=LEVEL1_AREA_RANGE, aspect_range=LEVE
     return forged, mask, params
 
 
-# Difficulty levels available (issues #24-#27); levels 2-4 to be added.
-LEVELS = {1: copy_move_level1}
+# ---------------------------------------------------------------------------
+# Level 2 (#25): varied simple shapes
+# ---------------------------------------------------------------------------
+
+def ellipse_mask(height, width):
+    """Boolean mask of the ellipse inscribed in a height x width box.
+
+    A pixel is inside if its centre satisfies (x / rx)^2 + (y / ry)^2 <= 1,
+    with x, y measured from the centre of the box. A square box gives a disc.
+    """
+    rows, cols = np.mgrid[0:height, 0:width]
+    # Pixel centres, scaled so that the box spans [-1, 1] in both directions.
+    y = (rows + 0.5 - height / 2.0) / (height / 2.0)
+    x = (cols + 0.5 - width / 2.0) / (width / 2.0)
+    return x ** 2 + y ** 2 <= 1.0
+
+
+def random_polygon(rng, n_vertices_range=(5, 8), radius_range=(0.7, 1.0)):
+    """Draw a slightly irregular polygon, in coordinates normalized to [-1, 1].
+
+    The vertices go once around the centre, at roughly evenly spaced angles,
+    each at a random distance from the centre (0.7 to 1 of the half-size):
+    the result is a rounded, slightly bumpy shape, never self-intersecting
+    (the angles are sorted).
+
+    Returns
+    -------
+    ys, xs : numpy.ndarray
+        Vertex coordinates, in [-1, 1].
+    """
+    n_vertices = int(rng.integers(n_vertices_range[0], n_vertices_range[1] + 1))
+    rotation = rng.uniform(0.0, 2.0 * math.pi)
+    step = 2.0 * math.pi / n_vertices
+
+    angles = []
+    for k in range(n_vertices):
+        # Evenly spaced, each moved by at most a quarter of a step.
+        angles.append(rotation + k * step + rng.uniform(-0.25, 0.25) * step)
+    radii = rng.uniform(radius_range[0], radius_range[1], size=n_vertices)
+
+    ys = radii * np.sin(angles)
+    xs = radii * np.cos(angles)
+    return ys, xs
+
+
+def polygon_mask(height, width, ys, xs):
+    """Boolean mask of a polygon (normalized vertices) stretched over a box.
+
+    Classic even-odd rule: from each pixel centre, a ray going right crosses
+    the polygon edges an odd number of times if and only if the pixel is
+    inside.
+    """
+    rows, cols = np.mgrid[0:height, 0:width]
+    y = (rows + 0.5 - height / 2.0) / (height / 2.0)
+    x = (cols + 0.5 - width / 2.0) / (width / 2.0)
+
+    inside = np.zeros((height, width), dtype=bool)
+    n_vertices = len(ys)
+    for i in range(n_vertices):
+        j = i - 1  # previous vertex (index -1 = the last one: closes the polygon)
+        y_i, x_i, y_j, x_j = ys[i], xs[i], ys[j], xs[j]
+        if y_i == y_j:
+            continue  # a horizontal edge is never crossed by a horizontal ray
+        straddles = (y_i > y) != (y_j > y)
+        x_on_edge = x_i + (x_j - x_i) * (y - y_i) / (y_j - y_i)
+        inside ^= straddles & (x < x_on_edge)
+    return inside
+
+
+def shape_mask(shape, height, width, polygon=None):
+    """Boolean mask of `shape` ("rectangle", "ellipse" or "polygon") in a box."""
+    if shape == "rectangle":
+        return np.ones((height, width), dtype=bool)
+    if shape == "ellipse":
+        return ellipse_mask(height, width)
+    if shape == "polygon":
+        ys, xs = polygon
+        return polygon_mask(height, width, ys, xs)
+    raise ValueError(f"Unknown shape: {shape}")
+
+
+def random_shape(rng, patch_size, area_range, aspect_range, shapes):
+    """Draw a shape and a box size so that the SHAPE covers the drawn area.
+
+    A shape does not fill its box (an ellipse fills ~79 % of it), so the box
+    is sized in two passes: a first box with the target area, then a box
+    rescaled by sqrt(target / measured) so that the shape itself covers the
+    target fraction of the patch (up to rounding).
+
+    Returns
+    -------
+    shape : str
+    inside : numpy.ndarray of bool
+        The shape, in its box (height x width).
+    """
+    shape = shapes[int(rng.integers(len(shapes)))]
+    polygon = random_polygon(rng) if shape == "polygon" else None
+    height, width = random_rectangle_size(rng, patch_size, area_range, aspect_range)
+    target_pixels = height * width
+
+    inside = shape_mask(shape, height, width, polygon)
+    scale = math.sqrt(target_pixels / max(int(inside.sum()), 1))
+    height = min(int(round(height * scale)), patch_size // 2)
+    width = min(int(round(width * scale)), patch_size // 2)
+    inside = shape_mask(shape, height, width, polygon)
+    return shape, inside
+
+
+def touches_border(row_min, col_min, row_max, col_max, patch_size):
+    """Tell whether a box (row_max / col_max excluded) touches the patch border."""
+    return row_min == 0 or col_min == 0 or row_max == patch_size or col_max == patch_size
+
+
+LEVEL2_AREA_RANGE = (0.02, 0.05)              # fraction of the patch covered by the shape
+LEVEL2_ASPECT_RANGE = (0.5, 2.0)              # height / width of the shape's box
+LEVEL2_BORDER_MARGIN = 0                      # from level 2 on, pastes may touch the border
+LEVEL2_SHAPES = ("rectangle", "ellipse", "polygon")
+
+
+def copy_move_level2(patch, rng, area_range=LEVEL2_AREA_RANGE, aspect_range=LEVEL2_ASPECT_RANGE,
+                     margin=LEVEL2_BORDER_MARGIN, shapes=LEVEL2_SHAPES):
+    """Make a level-2 copy-move forgery: one paste of a varied simple shape (#25).
+
+    Same as level 1 (one paste, 2-5 % of the patch, exact copy, hard edges,
+    no transform), except that:
+    - the shape is drawn among a rectangle, an ellipse (or disc) and a
+      slightly irregular polygon;
+    - source and target may touch the patch border (their effect is measured
+      by the metrics without the 16-px border, #32).
+
+    Only the pixels INSIDE the shape are copied: the copied region has the
+    shape's outline, not its box's.
+
+    Returns
+    -------
+    forged, mask, params
+        As for `copy_move_level1`; params also hold `touches_border` (1 if the
+        source or the target box touches the border).
+    """
+    patch_size = patch.shape[0]
+    shape, inside = random_shape(rng, patch_size, area_range, aspect_range, shapes)
+    height, width = inside.shape
+
+    # Draw source and target boxes until they do not overlap (so neither do
+    # the shapes, which lie inside them).
+    for _ in range(MAX_TRIES):
+        src_row, src_col = random_position(rng, patch_size, height, width, margin)
+        tgt_row, tgt_col = random_position(rng, patch_size, height, width, margin)
+        source_box = (src_row, src_col, src_row + height, src_col + width)
+        target_box = (tgt_row, tgt_col, tgt_row + height, tgt_col + width)
+        if not boxes_overlap(source_box, target_box):
+            break
+    else:
+        raise RuntimeError("Could not place two non-overlapping shapes")
+
+    # The forgery: inside the shape, the target receives an exact copy of the
+    # source; outside the shape, the target box keeps its own pixels.
+    forged = patch.copy()
+    target_view = forged[tgt_row:tgt_row + height, tgt_col:tgt_col + width]
+    source_view = patch[src_row:src_row + height, src_col:src_col + width]
+    target_view[inside] = source_view[inside]
+
+    mask = np.zeros(patch.shape, dtype=np.uint8)
+    mask[src_row:src_row + height, src_col:src_col + width][inside] = MASK_SOURCE
+    mask[tgt_row:tgt_row + height, tgt_col:tgt_col + width][inside] = MASK_PASTED
+
+    on_border = (touches_border(*source_box, patch_size) or touches_border(*target_box, patch_size))
+    params = {
+        "shape": shape,
+        "bbox_row_min": tgt_row,
+        "bbox_col_min": tgt_col,
+        "bbox_row_max": tgt_row + height,
+        "bbox_col_max": tgt_col + width,
+        "src_offset_row": src_row - tgt_row,
+        "src_offset_col": src_col - tgt_col,
+        "paste_fraction": int(inside.sum()) / (patch_size * patch_size),
+        "touches_border": int(on_border),
+    }
+    return forged, mask, params
+
+
+# Difficulty levels available (issues #24-#27); levels 3-4 to be added.
+LEVELS = {1: copy_move_level1, 2: copy_move_level2}
 
 
 def build_dataset(dataset_dir, level=1, seed=SEED):

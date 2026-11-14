@@ -166,6 +166,24 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   - At level 1, source and target stay **at least 32 px from the patch
     border**, so a failure cannot come from border effects. From level 2 on,
     pastes may touch the border, and their effect is measured (#32).
+  - Level 2 (#25): rectangle, ellipse or slightly irregular polygon, drawn
+    with equal odds; the shape itself (not its box) covers 2-5 % of the
+    patch; only the pixels inside the shape are copied.
+  - Every level is built from the **same authentic patches and split**, so
+    a model can be scored on every level, and the scores compared.
+- **Plan across levels (decided 2026-11-14).** Level 1 is saturated (test
+  MCC 1.000): it leaves no room to measure the added value of SAR cues
+  (v0.2). So, level by level:
+  1. generate the level-k dataset and evaluate the **current model** on it,
+     without retraining, first with the settings of its own level kept
+     frozen (pure generalization), then if useful with the settings chosen
+     again on the level-k val (thresholds adapt, weights do not);
+  2. if the scores hold, no new training is needed; if not, train on level k
+     (or on a mix of levels), and check that the new model still does well
+     on the **lower** levels too;
+  3. stop at the first model that generalizes well across the levels. The
+     result is a table *model x level*, the baseline against which the SAR
+     cues of v0.2 are measured, level by level.
 - **Training set fixed and precomputed first**, for full control over the
   data. On-the-fly generation (#29) comes later, seeded from (epoch, index) so
   any training sample can be regenerated.
