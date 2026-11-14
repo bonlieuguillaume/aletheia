@@ -368,6 +368,25 @@ band). At level 1 pastes stay 32 px away from the border, so the gap only
 reflects border false alarms (a check of reflection padding, #31); from
 level 2 on, it also shows whether pastes touching the border are missed.
 
+### Scoring a run on another level of forgeries
+
+A run is trained on the forgeries of one level T; it can then be scored on
+the test set of any level D (same authentic patches, same split, other
+forgeries). Results go into the run folder, as `eval_level<D>_trained<T>/`.
+
+| Folder | Weights | Settings (score method, image and pixel thresholds) | Use |
+|---|---|---|---|
+| `eval_level<T>_trained<T>/` | learned on level T | chosen on the **val of level T** (step 3 above) | the run on its own level; read back by `unet.load_model` |
+| `eval_level<D>_trained<T>/` | learned on level T, unchanged | the ones of `eval_level<T>_trained<T>/`, **kept frozen**; the val of level D is not used | **the rule of the project** (`REUSE_SETTINGS = True`): pure generalization, the model is scored exactly as it came out of level T |
+| `eval_level<D>_trained<T>_retuned/` | learned on level T, unchanged | **chosen again on the val of level D**, from this model's predictions on the level-D forgeries, then applied to the level-D test | option kept in the code, **not used** (`REUSE_SETTINGS = False`) |
+
+Why the retuned option is not used: it is a hybrid, a model whose weights
+were fixed on level T with decision settings tuned on level D. Its score
+mixes two things, what the network learned and how well the thresholds fit
+the new forgeries, and would not say whether the model generalizes. If the
+frozen settings suit a new level poorly, the answer is to train on that level
+(a new run, `v0.1_level<D>_resnet34`), not to re-tune the thresholds only.
+
 ### Worked examples
 
 Image level, 400 forged + 400 authentic test patches:
