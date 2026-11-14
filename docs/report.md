@@ -175,9 +175,12 @@ copy-pasted forest**, the SAR counterpart of the optical case documented by
   MCC 1.000): it leaves no room to measure the added value of SAR cues
   (v0.2). So, level by level:
   1. generate the level-k dataset and evaluate the **current model** on it,
-     without retraining, first with the settings of its own level kept
-     frozen (pure generalization), then if useful with the settings chosen
-     again on the level-k val (thresholds adapt, weights do not);
+     without retraining and with the settings of its own level kept frozen
+     (`REUSE_SETTINGS = True`, used throughout the project): the model is
+     scored exactly as it came out of its own level, weights and thresholds.
+     Re-choosing the thresholds on the level-k val (`False`) stays possible
+     in the code but is not used: it would mix a model fixed on one level
+     with settings tuned on another, which blurs what is measured;
   2. if the scores hold, no new training is needed; if not, train on level k
      (or on a mix of levels), and check that the new model still does well
      on the **lower** levels too;

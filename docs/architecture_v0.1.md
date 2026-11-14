@@ -532,7 +532,7 @@ short version; the longer cases follow it.
 | E5 | Pixel threshold on a 0.05 grid | Cheap (the candidates would be 100 million pixel values) | May miss the optimum by < 0.05 | Finer grid |
 | E6 | Pixel MCC averaged per patch as the main figure | Every paste counts the same, whatever its size | The opposite weighting to the loss (M5) | The global value is reported too |
 | E7 | Settings chosen on val, applied once on test | An unbiased test score | Val is used twice (checkpoint, settings), so its scores are optimistic | Report test only |
-| E8 | A run scored on another level keeps its own settings, frozen (`REUSE_SETTINGS`) | Pure generalization: nothing at all is tuned on the new forgeries | Thresholds tuned for one kind of paste may suit another poorly | Re-choose them on that level's val (`_retuned`): the weights still never see it |
+| E8 | A run scored on another level keeps its own settings, frozen (`REUSE_SETTINGS = True`, used throughout the project) | Pure generalization: nothing at all is tuned on the new forgeries; the model is judged exactly as it came out of its own level | Thresholds tuned for one kind of paste may suit another poorly | Retrain on the new level. Re-choosing only the thresholds (`False`) exists in the code but is not used: a hybrid of a model fixed on one level and settings tuned on another |
 
 ### 7.2 Why no classification head (M2)
 
