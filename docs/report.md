@@ -396,7 +396,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 |---|---|---|---|
 | Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | image 0.869 / pixel 0.579 |
 | Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | image 1.000 / pixel 0.978 |
-| Level 3 | to do | to do | image 0.998 / pixel **0.991** |
+| Level 3 | image 0.998 / pixel **0.996** | to do | image 0.998 / pixel **0.991** |
 
 - **The level-1 model does not generalize to varied shapes.** On level 2:
   200 of the 400 forged test patches missed, no false alarm on the 400
@@ -472,6 +472,11 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   (~2,000 pixels in all over the 400 authentic patches, against ~0 for the
   other models): the first false-alarm candidate of the gallery, to be
   looked at.
+- **Level-3 model on level 1** (`eval_level1_trained3/`, level-3 settings
+  frozen): image MCC 0.998 (400 TP, 1 FP), pixel MCC **0.996** (global
+  0.996), above the level-1 model on its own level (0.993). The false alarm
+  is the same authentic patch as on level 3 (the authentic patches are the
+  same at every level; same flagged fraction, 2.05e-5).
 
 ## 6. Presentation example
 
