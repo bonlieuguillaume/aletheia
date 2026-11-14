@@ -249,7 +249,7 @@ NULLABLE_INTEGER_COLUMNS = [
     "level",
     "bbox_row_min", "bbox_col_min", "bbox_row_max", "bbox_col_max",
     "src_offset_row", "src_offset_col",
-    "touches_border",
+    "touches_border", "n_pastes",
 ]
 
 

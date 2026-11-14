@@ -1,4 +1,4 @@
-"""Generate copy-move forgeries with their ground-truth masks (issues #5, #24, #25).
+"""Generate copy-move forgeries with their ground-truth masks (issues #5, #24-#26).
 
 For every authentic patch written by `tiling`, one forged twin is made: a
 region of the patch is copied and pasted elsewhere in the same patch.
@@ -14,7 +14,9 @@ inside the patch, not overlapping, both at least 32 px from the border, no
 transform, hard edges.
 Level 2 (#25): the same, with a shape drawn among rectangle, ellipse and
 slightly irregular polygon, and pastes allowed to touch the border.
-Levels 3-4 (#26, #27) will be added to `LEVELS`.
+Level 3 (#26): 2 to 4 pastes per patch, each as at level 2, none overlapping
+another paste nor any source.
+Level 4 (#27) will be added to `LEVELS`.
 
 Every forgery is drawn from a random generator seeded by (seed, patch index):
 the same seed always gives the same dataset, and any single forgery can be
@@ -26,6 +28,7 @@ Command line (from the repository root):
 """
 
 import argparse
+import json
 import math
 import sys
 from pathlib import Path
@@ -332,8 +335,134 @@ def copy_move_level2(patch, rng, area_range=LEVEL2_AREA_RANGE, aspect_range=LEVE
     return forged, mask, params
 
 
-# Difficulty levels available (issues #24-#27); levels 3-4 to be added.
-LEVELS = {1: copy_move_level1, 2: copy_move_level2}
+# ---------------------------------------------------------------------------
+# Level 3 (#26): several pastes per patch
+# ---------------------------------------------------------------------------
+
+LEVEL3_N_PASTES = (2, 4)                      # number of pastes per patch (both included)
+MAX_LAYOUTS = 200                             # attempts to fit all the pastes in one patch
+
+
+def place_boxes(rng, patch_size, sizes, margin):
+    """Place a source and a target box for each size, no two boxes overlapping.
+
+    Boxes are placed one pair at a time; each new box must not overlap any
+    box already placed (sources and targets alike), so no paste overlaps
+    another paste nor any source.
+
+    Parameters
+    ----------
+    sizes : list of (height, width)
+        One entry per paste.
+
+    Returns
+    -------
+    list of (source_box, target_box), or None if a pair could not be placed
+    after MAX_TRIES attempts (the caller then starts a new layout).
+    """
+    placed = []      # every box already in the patch
+    pairs = []
+    for height, width in sizes:
+        for _ in range(MAX_TRIES):
+            src_row, src_col = random_position(rng, patch_size, height, width, margin)
+            tgt_row, tgt_col = random_position(rng, patch_size, height, width, margin)
+            source_box = (src_row, src_col, src_row + height, src_col + width)
+            target_box = (tgt_row, tgt_col, tgt_row + height, tgt_col + width)
+
+            free = not boxes_overlap(source_box, target_box)
+            for box in placed:
+                if boxes_overlap(box, source_box) or boxes_overlap(box, target_box):
+                    free = False
+                    break
+            if free:
+                placed.extend([source_box, target_box])
+                pairs.append((source_box, target_box))
+                break
+        else:
+            return None
+    return pairs
+
+
+def copy_move_level3(patch, rng, n_pastes_range=LEVEL3_N_PASTES, area_range=LEVEL2_AREA_RANGE,
+                     aspect_range=LEVEL2_ASPECT_RANGE, margin=LEVEL2_BORDER_MARGIN, shapes=LEVEL2_SHAPES):
+    """Make a level-3 copy-move forgery: several pastes in one patch (#26).
+
+    2 to 4 pastes, each drawn as at level 2 (rectangle, ellipse or slightly
+    irregular polygon, the shape covering 2-5 % of the patch, exact copy,
+    hard edges, border allowed). No paste overlaps another paste nor any
+    source. Every source is read from the untouched authentic patch.
+
+    Returns
+    -------
+    forged, mask
+        As for the other levels; the mask is the union of all the pastes (1)
+        and of all their sources (2).
+    params : dict
+        For the manifest: `n_pastes`; `shape` (e.g. "ellipse+polygon");
+        `bbox_*` = box enclosing all the pastes; `src_offset_*` left empty
+        (one per paste, see `pastes`); `paste_fraction` = all the pasted
+        pixels / patch pixels; `touches_border`; `pastes` = the details of
+        every paste as JSON text (shape, target box, source offset, fraction).
+    """
+    patch_size = patch.shape[0]
+    n_pastes = int(rng.integers(n_pastes_range[0], n_pastes_range[1] + 1))
+
+    # Draw the shapes, then try to fit them all; if the patch is too crowded
+    # for this draw, start again with new shapes.
+    for _ in range(MAX_LAYOUTS):
+        drawn = []
+        for _ in range(n_pastes):
+            drawn.append(random_shape(rng, patch_size, area_range, aspect_range, shapes))
+        sizes = [inside.shape for _, inside in drawn]
+        pairs = place_boxes(rng, patch_size, sizes, margin)
+        if pairs is not None:
+            break
+    else:
+        raise RuntimeError(f"Could not fit {n_pastes} non-overlapping pastes")
+
+    forged = patch.copy()
+    mask = np.zeros(patch.shape, dtype=np.uint8)
+    details = []
+    on_border = False
+    for (shape, inside), (source_box, target_box) in zip(drawn, pairs):
+        s_r0, s_c0, s_r1, s_c1 = source_box
+        t_r0, t_c0, t_r1, t_c1 = target_box
+
+        # Same copy as level 2, the source always read from the authentic patch.
+        target_view = forged[t_r0:t_r1, t_c0:t_c1]
+        target_view[inside] = patch[s_r0:s_r1, s_c0:s_c1][inside]
+        mask[s_r0:s_r1, s_c0:s_c1][inside] = MASK_SOURCE
+        mask[t_r0:t_r1, t_c0:t_c1][inside] = MASK_PASTED
+
+        if touches_border(*source_box, patch_size) or touches_border(*target_box, patch_size):
+            on_border = True
+        details.append({
+            "shape": shape,
+            "bbox": [t_r0, t_c0, t_r1, t_c1],
+            "src_offset": [s_r0 - t_r0, s_c0 - t_c0],
+            "paste_fraction": round(int(inside.sum()) / (patch_size * patch_size), 5),
+        })
+
+    targets = [target_box for _, target_box in pairs]
+    params = {
+        "shape": "+".join(shape for shape, _ in drawn),
+        "n_pastes": n_pastes,
+        # Box enclosing all the pastes (one box per paste in `pastes`).
+        "bbox_row_min": min(box[0] for box in targets),
+        "bbox_col_min": min(box[1] for box in targets),
+        "bbox_row_max": max(box[2] for box in targets),
+        "bbox_col_max": max(box[3] for box in targets),
+        "src_offset_row": None,   # one offset per paste: see `pastes`
+        "src_offset_col": None,
+        "paste_fraction": int((mask == MASK_PASTED).sum()) / (patch_size * patch_size),
+        "touches_border": int(on_border),
+        "pastes": json.dumps(details),
+    }
+    return forged, mask, params
+
+
+# Difficulty levels available (issues #24-#27); level 4 to be added.
+LEVELS = {1: copy_move_level1, 2: copy_move_level2, 3: copy_move_level3}
 
 
 def build_dataset(dataset_dir, level=1, seed=SEED):
