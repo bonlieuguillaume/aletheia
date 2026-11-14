@@ -241,6 +241,23 @@ networks train.
   last step, 256 -> 512, has no skip (no 512 stage in the encoder); a final
   3x3 convolution reduces the channels to 1, the probability map.
 
+**Size: 24.4 million trainable parameters** (24,430,097, counted from the
+layers below; matches `smp.Unet("resnet34", in_channels=1, classes=1)`):
+
+| Part | Parameters | Share |
+|---|---|---|
+| Encoder ResNet-34 (classification layer removed, first convolution on 1 channel: 64 x 1 x 7 x 7 = 3,136 weights instead of 9,408) | 21,278,400 | 87 % |
+| Decoder, 5 blocks of two 3x3 convolutions + batch norm (channels 256, 128, 64, 32, 16) | 3,151,552 | 13 % |
+| Final 3x3 convolution, 16 channels -> 1 map | 145 | < 0.01 % |
+
+Almost all the weights are in the pretrained encoder; the decoder, trained
+from scratch, is small. The largest single layer is the first decoder
+convolution (512 + 256 skip channels -> 256: 1.77 M weights). For scale:
+2,400 training samples of 262,144 pixels each, i.e. ~630 million labelled
+pixels for 24 million weights. On a T4, the model, its gradients and the
+AdamW state take a few hundred MB; most of the GPU memory goes to the
+activations of a batch of 8 patches of 512x512.
+
 **Settings of the model and its training:**
 
 - Encoder ResNet-34, ImageNet weights, first layer adapted to one channel;
