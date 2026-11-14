@@ -109,16 +109,6 @@ splicing from another acquisition
 Full analysis, every design choice and its rationale:
 [docs/report.md](docs/report.md) (section 5).
 
-### Out-of-domain illustration
-
-The Vertical 52 case itself is an **optical** image. Running the SAR model
-on a screenshot of it (grey levels matched to the SAR statistics, see
-[features/external_image](features/external_image/)) is shown for
-illustration only: optical, resampled and compressed, it has no metric
-value.
-
-![Level-3 model on a screenshot of the Vertical 52 image](docs/figures/readme/external_vertical52.png)
-
 ## How it works
 
 ```mermaid
@@ -167,7 +157,6 @@ Data and checkpoints live on Google Drive under `MyDrive/aletheia/`.
 | 2. Forgeries | [features/copy_move/copy_move.ipynb](features/copy_move/copy_move.ipynb) | CPU | patches -> `dataset_v0.1_level<L>.zip` |
 | 3. Training | [features/unet/unet.ipynb](features/unet/unet.ipynb) | GPU | dataset -> `runs/<run>/` |
 | 4. Evaluation | [features/evaluation/evaluation.ipynb](features/evaluation/evaluation.ipynb) | GPU | run + dataset -> `runs/<run>/eval_level<D>_trained<T>/` |
-| Any image | [features/external_image/external_image.ipynb](features/external_image/external_image.ipynb) | GPU | PNG / JPG -> figure + JSON |
 
 Open a notebook in Colab, set the parameters of its first cell, run all.
 The scenes are preprocessed beforehand with SNAP (graph:
