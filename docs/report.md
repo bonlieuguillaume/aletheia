@@ -4,9 +4,10 @@ Living document: every design choice of the project, **why** it was made, and
 what remains open. It is updated as the work progresses; the task list itself
 lives in the [GitHub Project](https://github.com/users/bonlieuguillaume/projects/5).
 
-Status: v0.1 code written (tiling, level-1 copy-move, U-Net, evaluation);
-scenes preprocessed, tiling (2000 patches), copy-move and a first training
-run and its evaluation done (section 5.1). Last update: 2026-11-13.
+Status: v0.1 code written (tiling, copy-move levels 1-3, U-Net, evaluation);
+scenes preprocessed, tiling (2000 patches), one model trained per level 1-3,
+evaluation across levels in progress (sections 5.1, 5.2). Last update:
+2026-11-14.
 Architecture and metric procedure of v0.1, with every trade-off listed in one
 table (section 7): [architecture_v0.1.md](architecture_v0.1.md).
 
@@ -385,6 +386,45 @@ pixel MCC 0.979).
 Per test scene: ds_forest_1 pixel MCC 0.992, ds_forest_9 (mirrored) 0.994,
 every forged patch detected in both. Mean and global pixel MCC are nearly
 equal: the localization does not depend on the paste size.
+
+### 5.2 Across levels (2026-11-14)
+
+Plan of section 3.1: each model is scored on every level, with the settings
+of its own level frozen. Test results, mean pixel MCC per forged patch:
+
+| Model (trained on) | Level 1 | Level 2 | Level 3 |
+|---|---|---|---|
+| Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | to do |
+| Level 2 | to do | image **0.998** / pixel **0.981** | to do |
+| Level 3 | to do | to do | to do |
+
+- **The level-1 model does not generalize to varied shapes.** On level 2:
+  200 of the 400 forged test patches missed, no false alarm on the 400
+  authentic ones (the same patches as at level 1), AUC 0.855, pixel MCC 0.463
+  (global 0.642). It learned the rectangle, not the duplication: a model
+  had to be trained on level 2.
+- **Level-2 run** (`v0.1_level2_resnet34`): all 40 epochs (~102 s each),
+  best checkpoint at epoch 36 (val loss 0.0208; at 0.5 and "max": val
+  image MCC 0.998, pixel MCC 0.981).
+- **Level-2 settings** (`eval_level2_trained2/settings.json`): top0.5%,
+  image threshold 0.043, pixel threshold 0.45, val image MCC 1.0, but a
+  **margin of only 0.066** (level 1: 0.992). The interval of equally good
+  thresholds is about (0.010, 0.076]: the least visible forged val patch
+  scores ~0.08, barely above the authentic ones. The threshold is therefore
+  low and tight, which is the likely cause of the one missed test patch, and
+  these frozen settings will meet the other levels with little room. The
+  selection rule (section 5, architecture 7.5) is **kept unchanged**: it was
+  fixed before these results, and changing it in view of a test result would
+  tune it on the test set.
+- On its own level, the level-2 model does almost as well as the level-1
+  model on level 1, on a harder task. Pixel MCC 0.981 vs 0.993: curved and
+  irregular shapes have more edge per area, and pixel errors sit on the
+  edges (to be checked in `metrics_by_shape.csv`).
+- **Level-3 run** (`v0.1_level3_resnet34`): early stopping at epoch 36,
+  best checkpoint at epoch 28 (val loss 0.0126; at 0.5 and "max": val image
+  MCC 0.993, pixel MCC 0.991), ~1 h at ~103 s per epoch. Val figures of
+  different levels are not comparable (different val sets): the table
+  above is.
 
 ## 6. Presentation example
 
