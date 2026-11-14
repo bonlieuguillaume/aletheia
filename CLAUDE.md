@@ -147,7 +147,9 @@ run folder, so the steps chain through Drive, not through a shared session.
   Every level reuses the same authentic patches and split.
 - `features/unet/` - #9, #10, #31: smp U-Net (ResNet-34, ImageNet),
   reflection padding, BCE + batch Dice, resume from `last.pt`, `predict`.
-  `config.json` of a run holds the normalization and the git commit.
+  `config.json` of a run holds the normalization, the training level and the
+  git commit. Run folder `v0.1_level<L>_resnet34<RUN_SUFFIX>`, suffix empty
+  for the default configuration, naming any variant otherwise.
 - `features/evaluation/` - #6-#8, #32: model-agnostic metrics; settings
   (score method, thresholds) chosen on val, frozen in
   `runs/<run>/eval_level<D>_trained<T>/settings.json` (run trained on level
