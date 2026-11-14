@@ -395,7 +395,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 | Model (trained on) | Level 1 | Level 2 | Level 3 |
 |---|---|---|---|
 | Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | to do |
-| Level 2 | to do | image **0.998** / pixel **0.981** | to do |
+| Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | to do |
 | Level 3 | to do | to do | to do |
 
 - **The level-1 model does not generalize to varied shapes.** On level 2:
@@ -420,6 +420,11 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   model on level 1, on a harder task. Pixel MCC 0.981 vs 0.993: curved and
   irregular shapes have more edge per area, and pixel errors sit on the
   edges (to be checked in `metrics_by_shape.csv`).
+- **The level-2 model generalizes down to level 1** (`eval_level1_trained2/`,
+  level-2 settings frozen): image MCC 0.998 (399 TP, 1 FN, 0 FP, 400 TN),
+  AUC 1.000, pixel MCC 0.989 (global 0.990), false alarms ~0.01 pixel per
+  authentic patch. Almost the level-1 model's own score (1.000 / 0.993),
+  despite the narrow margin of its threshold.
 - **Level-3 run** (`v0.1_level3_resnet34`): early stopping at epoch 36,
   best checkpoint at epoch 28 (val loss 0.0126; at 0.5 and "max": val image
   MCC 0.993, pixel MCC 0.991), ~1 h at ~103 s per epoch. Val figures of
