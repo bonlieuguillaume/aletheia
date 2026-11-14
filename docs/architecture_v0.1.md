@@ -404,6 +404,14 @@ the new forgeries, and would not say whether the model generalizes. If the
 frozen settings suit a new level poorly, the answer is to train on that level
 (a new run, `v0.1_level<D>_resnet34`), not to re-tune the thresholds only.
 
+**Run names.** `v0.1_level<T>_resnet34<RUN_SUFFIX>`: the level the run was
+trained on, then a suffix that is **empty for the default configuration**
+and names any variant (e.g. `_augment` for the east-west mirror, #37). Two
+runs on the same level therefore never share a folder: without a suffix, a
+second training on a level would find the first run's `last.pt` and resume
+it, ignoring its new configuration. The same `RUN_SUFFIX` is set in the unet
+and evaluation notebooks.
+
 ### Worked examples
 
 Image level, 400 forged + 400 authentic test patches:

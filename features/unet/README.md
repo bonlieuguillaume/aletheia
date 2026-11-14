@@ -9,6 +9,9 @@ Issues #9, #10, #31. U-Net with a ResNet-34 encoder pretrained on ImageNet
   evaluation has run), `iterate_predictions` (a whole split, for the
   evaluation), `build_model`, `loss_function`.
 - **Notebook** `unet.ipynb` drives the training on Colab (**GPU runtime**).
+  The run folder is `runs/v0.1_level<L>_resnet34<RUN_SUFFIX>`: `RUN_SUFFIX`
+  is empty for the default configuration and names any variant (e.g.
+  `_augment`), so that a variant never resumes another run.
 
 | | Where | Content |
 |---|---|---|
