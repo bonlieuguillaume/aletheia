@@ -452,7 +452,7 @@ $$S_{max} = \max_i p_i, \qquad S_{top\text{-}k} = \text{mean of the } \lceil k N
 
 **Decision and zone** (`unet.predict`), with the frozen settings:
 
-$$\text{forged} = \mathbb{1}[S \geq \tau_{img}], \qquad \text{zone} = \{\, i : p_i \geq \tau_{pix} \,\} \text{ if forged, } \emptyset \text{ otherwise}$$
+$$\text{forged} = \mathbb{1}[S \geq \tau_{img}], \qquad \text{zone} = \{ i : p_i \geq \tau_{pix} \} \text{ if forged, } \emptyset \text{ otherwise}$$
 
 **Confusion counts** at a pixel threshold $\tau$ (`evaluation.confusion_counts`),
 with $\hat{y}_i = \mathbb{1}[p_i \geq \tau]$:
