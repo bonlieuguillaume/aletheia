@@ -56,15 +56,13 @@ VV, 10 m pixels, calibrated and terrain-corrected with SNAP, **no speckle
 filter**. Tiled into 2,000 patches of 512x512 px (5 x 5 km), **split by
 scene** (6 train / 2 val / 2 test): the test landscapes are never seen in
 training. Every authentic patch gets a forged twin with its ground-truth
-mask, at three difficulty levels:
+mask, at three difficulty levels (mask: white = pasted, grey = source):
 
-![One example per difficulty level](docs/figures/readme/levels.png)
-
-| Level | Forgery |
-|---|---|
-| 1 | one rectangle, 2-5 % of the patch, away from the border |
-| 2 | one rectangle, ellipse or irregular polygon, may touch the border |
-| 3 | 2 to 4 pastes of mixed shapes, 4-20 % of the patch in all |
+| Level | Forgery | Example (forged patch, mask) |
+|---|---|---|
+| 1 | one rectangle, 2-5 % of the patch, away from the border | <img src="docs/figures/readme/level1.png" width="420" alt="Level 1 example"> |
+| 2 | one rectangle, ellipse or irregular polygon, may touch the border | <img src="docs/figures/readme/level2.png" width="420" alt="Level 2 example"> |
+| 3 | 2 to 4 pastes of mixed shapes, 4-20 % of the patch in all | <img src="docs/figures/readme/level3.png" width="420" alt="Level 3 example"> |
 
 **Model.** U-Net with a ResNet-34 encoder (ImageNet weights), one input
 channel (VV in dB, one global normalization), reflection padding, BCE + Dice
