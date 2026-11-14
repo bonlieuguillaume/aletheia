@@ -13,7 +13,7 @@ Issues #9, #10, #31. U-Net with a ResNet-34 encoder pretrained on ImageNet
 | | Where | Content |
 |---|---|---|
 | Reads | `MyDrive/aletheia/data/dataset_v0.1_level1.zip`, unzipped to the VM | output of copy_move |
-| Writes | `MyDrive/aletheia/runs/<run name>/` | `config.json`, `log.csv`, `last.pt`, `best.pt` |
+| Writes | `MyDrive/aletheia/runs/<run name>/` | `config.json`, `log.csv`, `last.pt`, `best.pt`, `training_curves.png` (last cell; can be redrawn from `log.csv` at any time) |
 
 Choices (rationale in `docs/report.md`, section 4):
 - input: linear values converted to dB, then **one global normalization**

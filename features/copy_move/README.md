@@ -15,6 +15,7 @@ and writes the dataset manifest.
 |---|---|---|
 | Reads | `MyDrive/aletheia/data/patches_v0.1.zip` | output of tiling |
 | Writes | VM `/content/dataset_level<L>/`, then `MyDrive/aletheia/data/dataset_v0.1_level<L>.zip` | `forged/`, `masks/`, `manifest.csv` (+ `real/`, `patches.csv`) |
+| Figures | `MyDrive/aletheia/data/figures/` | `forgeries_level<L>_<patch_id>.png` (3 examples per level) |
 
 Level 1: one rectangle, 2-5 % of the patch, aspect ratio 0.5-2, source and
 target in the patch, not overlapping, both >= 32 px from the border, exact
