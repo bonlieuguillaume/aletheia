@@ -394,7 +394,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 
 | Model (trained on) | Level 1 | Level 2 | Level 3 |
 |---|---|---|---|
-| Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | to do |
+| Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | image 0.869 / pixel 0.579 |
 | Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | image 1.000 / pixel 0.978 |
 | Level 3 | to do | to do | to do |
 
@@ -403,6 +403,23 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   authentic ones (the same patches as at level 1), AUC 0.855, pixel MCC 0.463
   (global 0.642). It learned the rectangle, not the duplication: a model
   had to be trained on level 2.
+- **The level-1 model looks better on level 3 than on level 2, for the same
+  reason** (`eval_level3_trained1/`, level-1 settings frozen): image MCC
+  0.869 (344 TP, 56 FN, 0 FP), pixel MCC 0.579. Each of the 2-4 pastes is a
+  rectangle one time in three, so most level-3 patches hold at least one,
+  and one rectangle found is enough to call the patch forged. Split by the
+  number of rectangles in the patch (from `metrics_by_shape.csv`):
+
+  | Rectangles in the patch | 0 | 1 | 2 | 3 |
+  |---|---|---|---|---|
+  | Forged patches (test) | 102 | 173 | 96 | 28 |
+  | Detected | 54 % | 95 % | 100 % | 100 % |
+  | Pixel MCC | 0.30 | 0.62 | 0.74 | 0.81 |
+
+  The image decision is rescued by the rectangles, not the localization:
+  the ellipses and polygons stay mostly missed in the map, and the pixel
+  MCC grows with the share of rectangles. Detection also grows with the
+  number of pastes (78 % with 2, 89 % with 3, 91 % with 4).
 - **Level-2 run** (`v0.1_level2_resnet34`): all 40 epochs (~102 s each),
   best checkpoint at epoch 36 (val loss 0.0208; at 0.5 and "max": val
   image MCC 0.998, pixel MCC 0.981).
