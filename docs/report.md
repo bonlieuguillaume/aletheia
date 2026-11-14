@@ -396,7 +396,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 |---|---|---|---|
 | Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | image 0.869 / pixel 0.579 |
 | Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | image 1.000 / pixel 0.978 |
-| Level 3 | to do | to do | to do |
+| Level 3 | to do | to do | image 0.998 / pixel **0.991** |
 
 - **The level-1 model does not generalize to varied shapes.** On level 2:
   200 of the 400 forged test patches missed, no false alarm on the 400
@@ -459,6 +459,19 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   MCC 0.993, pixel MCC 0.991), ~1 h at ~103 s per epoch. Val figures of
   different levels are not comparable (different val sets): the table
   above is.
+- **Level-3 settings** (`eval_level3_trained3/settings.json`): p99.5, image
+  threshold 0.500, pixel threshold 0.45, val image MCC 1.0, margin 0.9999:
+  on val the two classes sit at the two ends of [0, 1], unlike the level-2
+  model (margin 0.066).
+- **Level-3 model on level 3:** image MCC 0.998 (400 TP, **1 FP**, 0 FN,
+  399 TN), AUC 1.000, pixel MCC **0.991** (global 0.991), against 0.978 for
+  the level-2 model on the same test: having seen several pastes improves
+  the localization, and it no longer degrades with their number (0.992 /
+  0.991 / 0.991 for 2 / 3 / 4 pastes; 0.987 when a paste touches the
+  border). The one false alarm is an authentic patch with a flagged region
+  (~2,000 pixels in all over the 400 authentic patches, against ~0 for the
+  other models): the first false-alarm candidate of the gallery, to be
+  looked at.
 
 ## 6. Presentation example
 
