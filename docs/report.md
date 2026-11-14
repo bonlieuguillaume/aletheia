@@ -489,8 +489,14 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   error is a miss, made with a threshold 0.03 away from the scores of
   either class (margin 0.066); the level-3 model's error is a false alarm on
   one authentic patch, always the same, with a threshold in the middle of
-  an empty [0, 1] on val (margin 0.9999). The second is the more robust
-  rule; the patch itself is to be looked at.
+  an empty [0, 1] on val (margin 0.9999); the patch itself is to be looked
+  at. The two margins do **not** show that the models generalize very
+  differently: a margin is set by the single val patch closest to the
+  boundary (one hard forged patch at ~0.08 is enough to shrink it), the two
+  were measured on different val sets (level 2 vs level 3) with different
+  score methods (top0.5% vs p99.5), and the level-3 model still made a test
+  error despite its margin. Both separate the classes almost perfectly on
+  test (AUC 1.000).
 - *Localization: better on every level.* Pixel MCC 0.996 / 0.992 / 0.991 on
   levels 1 / 2 / 3, against 0.989 / 0.981 / 0.978 for the level-2 model;
   it no longer drops with the number of pastes nor at the border.
