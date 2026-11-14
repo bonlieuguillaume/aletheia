@@ -396,7 +396,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 |---|---|---|---|
 | Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | image 0.869 / pixel 0.579 |
 | Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | image 1.000 / pixel 0.978 |
-| Level 3 | image 0.998 / pixel **0.996** | to do | image 0.998 / pixel **0.991** |
+| Level 3 | image 0.998 / pixel **0.996** | image 0.998 / pixel **0.992** | image 0.998 / pixel **0.991** |
 
 - **The level-1 model does not generalize to varied shapes.** On level 2:
   200 of the 400 forged test patches missed, no false alarm on the 400
@@ -477,6 +477,29 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   0.996), above the level-1 model on its own level (0.993). The false alarm
   is the same authentic patch as on level 3 (the authentic patches are the
   same at every level; same flagged fraction, 2.05e-5).
+- **Level-3 model on level 2** (`eval_level2_trained3/`): image MCC 0.998
+  (400 TP, the same 1 FP), pixel MCC **0.992** (global 0.992), against 0.981
+  for the level-2 model on its own level. By shape: rectangle 0.996,
+  ellipse 0.993, polygon 0.988.
+
+**Conclusion: the level-3 model is the reference model of v0.1.**
+
+- *Image decision: equivalent.* Both the level-2 and the level-3 models make
+  one error out of 800 test patches on every level. The level-2 model's
+  error is a miss, made with a threshold 0.03 away from the scores of
+  either class (margin 0.066); the level-3 model's error is a false alarm on
+  one authentic patch, always the same, with a threshold in the middle of
+  an empty [0, 1] on val (margin 0.9999). The second is the more robust
+  rule; the patch itself is to be looked at.
+- *Localization: better on every level.* Pixel MCC 0.996 / 0.992 / 0.991 on
+  levels 1 / 2 / 3, against 0.989 / 0.981 / 0.978 for the level-2 model;
+  it no longer drops with the number of pastes nor at the border.
+- The level-2 model was the first one to generalize (plan of section 3.1),
+  but the level-3 model had already been trained and does better on every
+  level: it is kept, and no further level is trained for v0.1.
+- Limits: the gaps are small (about 0.01 of pixel MCC, one test error out of
+  800), measured on two test scenes; they show a trend, not a proven
+  ranking.
 
 ## 6. Presentation example
 
