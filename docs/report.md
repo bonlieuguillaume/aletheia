@@ -395,7 +395,7 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
 | Model (trained on) | Level 1 | Level 2 | Level 3 |
 |---|---|---|---|
 | Level 1 | image 1.000 / pixel 0.993 | image 0.577 / pixel 0.463 | to do |
-| Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | to do |
+| Level 2 | image 0.998 / pixel 0.989 | image **0.998** / pixel **0.981** | image 1.000 / pixel 0.978 |
 | Level 3 | to do | to do | to do |
 
 - **The level-1 model does not generalize to varied shapes.** On level 2:
@@ -425,6 +425,18 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   AUC 1.000, pixel MCC 0.989 (global 0.990), false alarms ~0.01 pixel per
   authentic patch. Almost the level-1 model's own score (1.000 / 0.993),
   despite the narrow margin of its threshold.
+- **The level-2 model also generalizes up to level 3** (`eval_level3_trained2/`),
+  although it only saw one paste per patch: image MCC 1.000 (400 TP, 0 FP),
+  pixel MCC 0.978 (global 0.978). It finds every paste, not only one: a
+  missed paste out of three would pull the pixel MCC of the patch far lower.
+  Pixel MCC by number of pastes: 0.983 (2), 0.980 (3), 0.971 (4); 0.980 when
+  no paste touches the border, 0.958 when one does (42 patches).
+- **Consequence for v0.2.** With one paste of any simple shape learned, the
+  image decision is saturated on levels 1-3 (MCC 0.998-1.000) and the
+  pixel MCC stays above 0.97: these levels leave little room to measure the
+  added value of the SAR cues. That room has to come from harder forgeries:
+  sizes from 1 % to 25 %+ (level 4, #27), a distant source (#30), splicing
+  (#17).
 - **Level-3 run** (`v0.1_level3_resnet34`): early stopping at epoch 36,
   best checkpoint at epoch 28 (val loss 0.0126; at 0.5 and "max": val image
   MCC 0.993, pixel MCC 0.991), ~1 h at ~103 s per epoch. Val figures of
