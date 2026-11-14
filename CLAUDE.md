@@ -101,10 +101,15 @@ Code is organised as one feature per folder of `features/` (module + notebook
   intermediate variables rather than dense one-liners, plenty of comments
   explaining the why (SAR specifics, design choices, link to the issue). The
   user reads and owns every line.
-- Git: the first working version goes in a single commit; once it runs, the
-  user sorts out which issues are done, and from then on **one branch per
-  issue**, merged by the user. Do not move project cards (Status) unless
-  asked.
+- Git: **anything that runs (`.py`, notebooks, tests, requirements, CI)
+  goes on a new branch** from `main` (one branch per issue, small
+  cross-cutting changes on a short branch of their own), never straight
+  onto `main`: the Colab notebooks clone `main`. Push it, wait for GitHub
+  Actions, and open the pull request only once the tests pass (with the
+  result in its description, "Part of #N" or "Closes #N"). **The user
+  reviews and merges every PR.** Pure documentation (`.md`: report,
+  architecture, READMEs) may go straight onto `main`. Do not move project
+  cards (Status) unless asked.
 - Tests run in **GitHub Actions** (Linux runners, small synthetic data), never
   on the user's PC; real runs happen on Colab, launched by the user.
   Rationale: `docs/github_actions.md`.
