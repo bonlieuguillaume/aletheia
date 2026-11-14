@@ -8,4 +8,5 @@ pandas
 scikit-learn
 matplotlib
 tifffile
+pillow           # reads PNG / JPG (external_image); already installed with matplotlib
 segmentation-models-pytorch
