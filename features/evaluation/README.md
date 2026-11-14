@@ -16,7 +16,7 @@ module knows nothing about the model. Full procedure:
 | | Where | Content |
 |---|---|---|
 | Reads | dataset zip, `runs/<run name>/best.pt` | |
-| Writes | `runs/<run name>/eval_level<D>_trained<T>/`: the run trained on level T, evaluated on level D. `eval_level1_trained1/` = its own level (settings chosen on its val). On another level, the weights AND the settings of level T are kept as they are (rule of the project). `_retuned` suffix: weights of level T, settings chosen again on the val of level D (option kept, not used; see `docs/architecture_v0.1.md`, section 5) | `settings.json` (chosen on val), `summary_test.json`, `results_test.csv`, `pred_maps/<sample_id>.tif` (test only, uint8), `gallery/*.png` (figures of cell 7), `metrics_by_<group>.csv` (cell 6: per level, scene, shape, border contact, number of pastes), `predictions/*.png` (cell 8) |
+| Writes | `runs/<run name>/eval_level<D>_trained<T>/`: the run trained on level T, evaluated on level D. `eval_level1_trained1/` = its own level (settings chosen on its val). On another level, the weights AND the settings of level T are kept as they are (rule of the project). `_retuned` suffix: weights of level T, settings chosen again on the val of level D (option kept, not used; see `docs/architecture_v0.1.md`, section 5) | `settings.json` (chosen on val), `summary_test.json`, `results_test.csv`, `pred_maps/<sample_id>.tif` (test only, uint8), `gallery/*.png` (figures of cell 7, titled and named with the decision: TP / FN / FP / TN), `metrics_by_<group>.csv` (cell 6: per level, scene, shape, border contact, number of pastes), `predictions/*.png` (cell 8) |
 
 Rules:
 - main metric MCC, second F1, ROC AUC as a threshold-free complement;
