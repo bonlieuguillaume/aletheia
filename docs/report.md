@@ -344,7 +344,7 @@ image MCC 0.944, mean pixel MCC 0.979 at epoch 15.
   validate the pipeline, not the difficulty of the problem (levels 2-4,
   #25-#27).
 
-**Settings chosen on val** (`eval/settings.json`, rule of
+**Settings chosen on val** (`eval_level1_trained1/settings.json`, rule of
 [architecture_v0.1.md](architecture_v0.1.md), section 5, step 3, and section 7.5):
 
 | Score method | Val image MCC | Threshold (middle) | Margin |
@@ -368,7 +368,7 @@ pixel MCC 0.979).
   the best MCC (0.993, ~3 val errors out of 800, on the wrong side whatever
   the threshold): the widest margin decides, not the order of the list.
 
-**Test results (v0.1, level 1)** (`eval/summary_test.json`):
+**Test results (v0.1, level 1)** (`eval_level1_trained1/summary_test.json`):
 
 | Metric | Test |
 |---|---|

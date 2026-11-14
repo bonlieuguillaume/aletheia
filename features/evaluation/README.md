@@ -16,7 +16,7 @@ module knows nothing about the model. Full procedure:
 | | Where | Content |
 |---|---|---|
 | Reads | dataset zip, `runs/<run name>/best.pt` | |
-| Writes | `runs/<run name>/eval/` (the run on its own level), or `eval_level<L>_frozen/` / `eval_level<L>_retuned/` (the run on another level, see the notebook's parameters) | `settings.json` (chosen on val), `summary_test.json`, `results_test.csv`, `pred_maps/<sample_id>.tif` (test only, uint8), `gallery/*.png` (figures of cell 7) |
+| Writes | `runs/<run name>/eval_level<D>_trained<T>/`: the run trained on level T, evaluated on level D (`eval_level1_trained1/` = its own level; on another level its own settings are kept frozen; `_retuned` suffix for the unused re-tuning option) | `settings.json` (chosen on val), `summary_test.json`, `results_test.csv`, `pred_maps/<sample_id>.tif` (test only, uint8), `gallery/*.png` (figures of cell 7) |
 
 Rules:
 - main metric MCC, second F1, ROC AUC as a threshold-free complement;

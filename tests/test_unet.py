@@ -77,6 +77,9 @@ def test_train_resume_and_predict(dataset_dir, tmp_path):
     assert len((run_dir / "log.csv").read_text().strip().splitlines()) == 1 + 2
 
     model, config = unet.load_model(run_dir)
+    # The training level is recorded and names the run's own evaluation.
+    assert config["dataset_level"] == 1
+    assert unet.own_eval_dir(run_dir, config).name == "eval_level1_trained1"
     patch = np.random.default_rng(0).gamma(4.4, 0.01, size=(64, 64)).astype(np.float32)
     score, is_forged, probability_map, zone = unet.predict(model, config, patch)
     assert probability_map.shape == (64, 64)
@@ -90,6 +93,13 @@ def test_train_resume_and_predict(dataset_dir, tmp_path):
     strict = {**config, "score_method": "max", "image_threshold": 1.1, "pixel_threshold": 0.5}
     score, is_forged, probability_map, zone = unet.predict(model, strict, patch)
     assert not is_forged and not zone.any()
+
+    # Settings saved by the evaluation of the run on its own level are read back.
+    own = unet.own_eval_dir(run_dir, config)
+    own.mkdir()
+    (own / "settings.json").write_text('{"score_method": "top1%", "image_threshold": 0.4, "pixel_threshold": 0.3}')
+    _, reloaded = unet.load_model(run_dir)
+    assert reloaded["score_method"] == "top1%" and reloaded["image_threshold"] == 0.4
 
     predictions = list(unet.iterate_predictions(model, config, dataset_dir, "test"))
     assert len(predictions) == 12  # 6 patches x (authentic + forged)

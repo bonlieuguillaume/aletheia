@@ -148,7 +148,9 @@ run folder, so the steps chain through Drive, not through a shared session.
   reflection padding, BCE + batch Dice, resume from `last.pt`, `predict`.
   `config.json` of a run holds the normalization and the git commit.
 - `features/evaluation/` - #6-#8, #32: model-agnostic metrics; settings
-  (score method, thresholds) chosen on val, frozen in `eval/settings.json`,
-  read back by `unet.load_model`.
+  (score method, thresholds) chosen on val, frozen in
+  `runs/<run>/eval_level<D>_trained<T>/settings.json` (run trained on level
+  T, evaluated on level D); the run's own level is read back by
+  `unet.load_model`. On another level, the own settings stay frozen.
 - `tests/` - pytest on synthetic data (256x256 patches), run by
   `.github/workflows/tests.yml`.

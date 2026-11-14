@@ -28,7 +28,7 @@ flowchart LR
         PZIP[("patches_v0.1.zip")]
         DZIP[("dataset_v0.1_level1.zip")]
         RUN[("runs/RUN_NAME/<br/>checkpoints, logs")]
-        EVAL[("runs/RUN_NAME/eval/<br/>settings, metrics, maps")]
+        EVAL[("runs/RUN_NAME/eval_levelD_trainedT/<br/>settings, metrics, maps")]
     end
 
     subgraph COLAB["Google Colab"]
@@ -325,7 +325,9 @@ Step by step (the *why* of each choice is in section 7):
      each side;
    - **pixel level**: the threshold of the grid 0.05, ..., 0.95 giving the
      best **mean per-patch pixel MCC** over the forged patches;
-   - the three settings are written to `eval/settings.json` and frozen.
+   - the three settings are written to `settings.json` of the evaluation
+     folder, `runs/<run>/eval_level<D>_trained<T>/` (run trained on level T,
+     evaluated on level D), and frozen.
      `unet.load_model` reads them back, so `unet.predict` applies them.
 4. **Final metrics, on the test set** (`compute_metrics`), with the frozen
    settings:
