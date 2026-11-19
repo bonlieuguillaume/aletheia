@@ -519,13 +519,33 @@ retraining, settings of its own SAR val frozen).
   spacing and same forests as Sentinel-1, no compression. Only the **test
   scenes of the SAR split** (ds_forest_1, 9) are used, so the model has
   never seen these landscapes, even in radar.
-- **Scale:** per scene (never per patch), the grey levels get the mean and
-  standard deviation, in dB, of the SAR training patches, and are written as
-  linear values (`to_pseudo_sar`, `features/external_image`). The model's
-  dB conversion and normalization then undo it exactly: the network sees the
-  grey levels standardized, on the same scale as SAR, and tiling, copy_move
-  and evaluation run unchanged. Grey is mapped onto dB linearly (a log of
-  the reflectance first is an alternative).
+- **Scale: optical grey -> pseudo-SAR dB -> pseudo-SAR linear -> back to dB
+  in the model.** The model reads linear SAR, converts it to dB and
+  normalizes it with the SAR training statistics (`mean_SAR`, `std_SAR`,
+  in dB, from `config.json`). The optical grey levels are written so that
+  this unchanged pipeline brings them to the same scale:
+
+  ```
+  1. optical grey g          -> z    = (g - mean(g)) / std(g)       per scene, never per patch
+  2. pseudo-SAR dB           -> v_dB = z * std_SAR + mean_SAR       SAR mean and spread, in dB
+  3. pseudo-SAR linear       -> v    = 10^(v_dB / 10)               written as the patch .tif
+  -- model, unchanged --
+  4. back to dB              -> 10 log10(v) = v_dB
+  5. normalization           -> (v_dB - mean_SAR) / std_SAR = z     what the network sees
+  ```
+
+  Steps 2-3 only exist so that tiling, copy_move and evaluation read the
+  optical patches like SAR ones, with no code change; steps 4-5 undo them.
+  **Limit:** this map is affine, so it matches the mean and the standard
+  deviation only; the shape of the histogram stays the optical one (skewed
+  or bimodal, shadows vs. bright canopy), whereas SAR forest in dB follows a
+  log-gamma law (speckle, tail towards dark values). **Alternative: histogram
+  (quantile) matching** in step 2: the grey level at quantile q takes the
+  value of quantile q of the SAR training distribution in dB, so the whole
+  marginal distribution is matched; being increasing, it keeps the order of
+  the pixels, hence the structures. Neither reproduces the **spatial**
+  statistics of speckle (independent from pixel to pixel): that is what the
+  synthetic-speckle control is for.
 - Same levels 1-3, same generators and seeds as SAR.
 - **Control: optical + synthetic speckle** (gamma, ENL 4.4). Without it, a
   failure on optical would be ambiguous (SAR-specific features, or just a
