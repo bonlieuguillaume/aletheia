@@ -507,6 +507,37 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   800), measured on two test scenes; they show a trend, not a proven
   ranking.
 
+### 5.3 Planned: optical control, SAR-specific or not? (#47, decided 2026-11-19)
+
+The level-3 model is near perfect on SAR, but what did it learn: generic
+**duplication** (two identical regions in the patch), or something
+**SAR-specific** (speckle statistics, radar texture of forest)? Planned test:
+the same forgeries on optical images, the model evaluated as it is (no
+retraining, settings of its own SAR val frozen).
+
+- **Sentinel-2 L2A**, grey = float mean of B2 / B3 / B4: same 10 m pixel
+  spacing and same forests as Sentinel-1, no compression. Only the **test
+  scenes of the SAR split** (ds_forest_1, 9) are used, so the model has
+  never seen these landscapes, even in radar.
+- **Scale:** per scene (never per patch), the grey levels get the mean and
+  standard deviation, in dB, of the SAR training patches, and are written as
+  linear values (`to_pseudo_sar`, `features/external_image`). The model's
+  dB conversion and normalization then undo it exactly: the network sees the
+  grey levels standardized, on the same scale as SAR, and tiling, copy_move
+  and evaluation run unchanged. Grey is mapped onto dB linearly (a log of
+  the reflectance first is an alternative).
+- Same levels 1-3, same generators and seeds as SAR.
+- **Control: optical + synthetic speckle** (gamma, ENL 4.4). Without it, a
+  failure on optical would be ambiguous (SAR-specific features, or just a
+  different-looking image).
+- Evaluation folders suffixed by the data source (e.g.
+  `eval_level3_trained3_optical`), so SAR results are never overwritten;
+  the east-west mirror of tiling is switched off (no orbit in optical).
+- Reading: works on optical -> duplication learned, the SAR cues of v0.2
+  have room to add something; fails on optical but works with speckle ->
+  the model relies on a speckle-like texture. A control on the nature of
+  what was learned, not a cross-sensor benchmark (S1 and S2 dates differ).
+
 ## 6. Presentation example
 
 Built **by hand** (#11): choose a forest scene and a base, paste forest
