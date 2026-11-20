@@ -158,10 +158,14 @@ run folder, so the steps chain through Drive, not through a shared session.
 - `features/evaluation/` - #6-#8, #32: model-agnostic metrics; settings
   (score method, thresholds) chosen on val, frozen in
   `runs/<run>/eval_level<D>_trained<T>/settings.json` (run trained on level
-  T, evaluated on level D); the run's own level is read back by
+  T, evaluated on level D; `_optical` suffix for #47); the run's own level is read back by
   `unet.load_model`. On another level, the own settings stay frozen.
 - `features/external_image/` - #11: one-cell notebook, any PNG / JPG ->
   pseudo-SAR (mean / std of training, in dB), 512 windows overlapping by
   half (max per pixel), frozen settings. Out-of-domain illustration only.
+- `features/optical/` - #47: optical control, Sentinel-2 (mean of B02-B04)
+  -> pseudo-SAR (histogram matched to SAR dB), with / without synthetic
+  speckle, test-only datasets `_optical[_speckle]`; evaluated with
+  `DATA_SOURCE` in the evaluation notebook.
 - `tests/` - pytest on synthetic data (256x256 patches), run by
   `.github/workflows/tests.yml`.

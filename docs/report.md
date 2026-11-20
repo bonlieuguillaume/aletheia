@@ -507,18 +507,25 @@ of its own level frozen. Test results, mean pixel MCC per forged patch:
   800), measured on two test scenes; they show a trend, not a proven
   ranking.
 
-### 5.3 Planned: optical control, SAR-specific or not? (#47, decided 2026-11-19)
+### 5.3 Optical control, SAR-specific or not? (#47, decided 2026-11-19)
 
 The level-3 model is near perfect on SAR, but what did it learn: generic
 **duplication** (two identical regions in the patch), or something
 **SAR-specific** (speckle statistics, radar texture of forest)? Planned test:
 the same forgeries on optical images, the model evaluated as it is (no
-retraining, settings of its own SAR val frozen).
+retraining, settings of its own SAR val frozen). Code: `features/optical`
+(conversion, tiling, forgeries), then `features/evaluation` with
+`DATA_SOURCE = "_optical"` / `"_optical_speckle"`.
 
 - **Sentinel-2 L2A**, grey = float mean of B2 / B3 / B4: same 10 m pixel
   spacing and same forests as Sentinel-1, no compression. Only the **test
   scenes of the SAR split** (ds_forest_1, 9) are used, so the model has
-  never seen these landscapes, even in radar.
+  never seen these landscapes, even in radar: S2A 2022-05-13, tile T19LHK
+  (6 days after the S1 scene) and S2A 2018-10-12, tile T21NZE (1 day
+  after). The T21NZE tile may overlap a little ds_forest_10 (train, across
+  the Maroni): accepted for this small experiment, given the change of
+  sensor. **Clouds are kept** on purpose: optical images usually have
+  some, so the test covers that general case.
 - **Scale: optical grey -> pseudo-SAR dB -> pseudo-SAR linear -> back to dB
   in the model.** The model reads linear SAR, converts it to dB and
   normalizes it with the SAR training statistics (`mean_SAR`, `std_SAR`,
@@ -546,10 +553,20 @@ retraining, settings of its own SAR val frozen).
   the pixels, hence the structures. Neither reproduces the **spatial**
   statistics of speckle (independent from pixel to pixel): that is what the
   synthetic-speckle control is for.
+  **Decision: histogram matching** (affine kept as an option, `METHOD`):
+  if the model fails on optical, an unusual grey-level distribution must
+  not be a possible cause. The reference is the distribution in dB of the
+  valid pixels of 200 authentic SAR training patches of the reference
+  model's dataset (no-data zeros excluded, so no spike at -60 dB); the
+  grey statistics are taken over the valid pixels of the whole scene
+  (Sentinel-2 no-data = 0, e.g. a tile cut by the swath), and no-data
+  stays 0, so the 5 % rule of tiling applies unchanged.
 - Same levels 1-3, same generators and seeds as SAR.
 - **Control: optical + synthetic speckle** (gamma, ENL 4.4). Without it, a
   failure on optical would be ambiguous (SAR-specific features, or just a
-  different-looking image).
+  different-looking image). Added **before** the matching, so that both
+  sources end with the SAR histogram, and the matching (increasing) keeps
+  the pixel-to-pixel texture of the speckle.
 - Evaluation folders suffixed by the data source (e.g.
   `eval_level3_trained3_optical`), so SAR results are never overwritten;
   the east-west mirror of tiling is switched off (no orbit in optical).
